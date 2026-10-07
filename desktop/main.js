@@ -85,6 +85,13 @@ function sidecarEnv(port) {
       ? path.join(process.resourcesPath, "web")
       : path.join(__dirname, "..", "web", "dist");
   }
+  if (!env.STTSHKA_ENV_FILE) {
+    // Secrets live outside the bundle — never packaged, never in git. A
+    // double-clicked app inherits no shell env, so the sidecar reads them here.
+    env.STTSHKA_ENV_FILE = app.isPackaged
+      ? path.join(app.getPath("userData"), ".env")
+      : path.join(__dirname, "..", ".env");
+  }
   return env;
 }
 

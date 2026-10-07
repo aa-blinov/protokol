@@ -10,8 +10,12 @@ from dataclasses import dataclass
 
 import httpx
 
-DEFAULT_MODEL = "openai/gpt-4o-mini"
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+import config
+
+# Both come from config, which reads the environment — otherwise an override in
+# .env would be silently ignored and the hardcoded value would always ship.
+DEFAULT_MODEL = config.DEFAULT_LLM_MODEL
+OPENROUTER_BASE_URL = config.OPENROUTER_BASE_URL
 SYSTEM_PROMPT = (
     "Ты — аналитик банковских звонков. На вход приходит транскрипция разговора, "
     "в которой персональные данные заменены токенами вида [PERSON_1], [PHONE_1], "

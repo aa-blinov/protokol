@@ -3,8 +3,15 @@ import { processAudio, type ProcessResult, type ProgressEvent, type Session } fr
 import { chipClass, Highlighted, MaskedView } from "./Highlight";
 import { Badge, Button, Card, EmptyState, ProgressBar } from "./ui";
 
+// Русские числительные требуют трёх форм; Intl.PluralRules закрывает краевые
+// случаи (11–14), которые ломают ручные формулы.
+function pluralRu(n: number, one: string, few: string, many: string): string {
+  const rule = new Intl.PluralRules("ru").select(n);
+  return rule === "one" ? one : rule === "few" ? few : many;
+}
+
 const STORAGE_KEY = "sttshka.sessions";
-const DEFAULT_MODEL = "openai/gpt-4o-mini";
+const DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash";
 
 function loadSessions(): Session[] {
   try {
@@ -191,7 +198,12 @@ export default function App() {
               <Card
                 title="2 · Маскированный текст — именно он уходит в LLM"
                 accent="#1d4ed8"
-                meta={<span className="font-mono">{Object.keys(result.entity_map).length} токенов</span>}
+                meta={
+                  <span className="font-mono">
+                    {Object.keys(result.entity_map).length}{" "}
+                    {pluralRu(Object.keys(result.entity_map).length, "токен", "токена", "токенов")}
+                  </span>
+                }
               >
                 <MaskedView text={result.masked_text} entityMap={result.entity_map} />
                 {Object.keys(result.entity_map).length > 0 ? (
