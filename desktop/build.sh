@@ -131,6 +131,12 @@ rm -rf dist build
 # ----------------------------------------------------------- desktop bundle
 say "3/4  Сборка приложения (electron-builder)"
 cd "$ROOT/desktop"
+# fpm/xz stages the whole ~2.2G payload inside TMPDIR while packing the deb.
+# Where /tmp is a small tmpfs that fails with a cryptic `tar failed (exit code
+# 2)`. Point staging at disk so the deb build never depends on tmpfs size.
+BUILD_TMPDIR="${XDG_CACHE_HOME:-$HOME/.cache}/sttshka-build-tmp"
+mkdir -p "$BUILD_TMPDIR"
+export TMPDIR="$BUILD_TMPDIR"
 [ -d node_modules ] || npm install --no-audit --no-fund
 if [ "$TARGET" = mac ]; then
   npx electron-builder --mac dmg zip --arm64

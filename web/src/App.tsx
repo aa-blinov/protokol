@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { processAudio, type ProcessResult, type ProgressEvent, type Session } from "./api";
-import { Highlighted, MaskedView } from "./Highlight";
+import { chipClass, Highlighted, MaskedView } from "./Highlight";
 import { Badge, Button, Card, EmptyState, ProgressBar } from "./ui";
 
 const STORAGE_KEY = "sttshka.sessions";
@@ -13,8 +13,6 @@ function loadSessions(): Session[] {
     return [];
   }
 }
-
-const chipClass = (type: string) => `chip chip-${type} chip-OTHER`;
 
 export default function App() {
   const [sessions, setSessions] = useState<Session[]>(loadSessions);
@@ -44,6 +42,9 @@ export default function App() {
         setSessions((previous) => [session, ...previous].slice(0, 50));
         setCurrent(session);
       } catch (caught) {
+        // The failed file is not the session on screen — drop that stale result,
+        // otherwise the error reads as belonging to the panels below it.
+        setCurrent(null);
         setError(caught instanceof Error ? caught.message : String(caught));
       } finally {
         setProgress(null);
@@ -201,7 +202,7 @@ export default function App() {
                     <ul className="mt-2 space-y-1">
                       {Object.entries(result.entity_map).map(([token, value]) => (
                         <li key={token} className="flex items-baseline gap-2 text-xs">
-                          <span className={`chip ${chipClass(token.replace(/_\d+$/, ""))}`}>{token}</span>
+                          <span className={chipClass(token.replace(/_\d+$/, ""))}>{token}</span>
                           <span className="font-mono text-slate-600">{value}</span>
                         </li>
                       ))}

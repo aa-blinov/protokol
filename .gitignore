@@ -10,3 +10,4 @@ release/
 models/gigaam/
 models/rubert-pii/
 .playwright-mcp/
+tsconfig.tsbuildinfo

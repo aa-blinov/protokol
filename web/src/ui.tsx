@@ -1,6 +1,23 @@
-/** Small presentational primitives, shadcn idiom: variants via class names. */
+/** App-level design primitives, layered on the shadcn/ui components.
+ *
+ *  The library supplies structure and behaviour — ARIA on Progress, focus and
+ *  disabled handling on Button — while the overrides below keep the app's own
+ *  slate/blue identity, which the README screenshots document. `cn` is
+ *  tailwind-merge, so a later className wins over the library's defaults.
+ *
+ *  Public API is stable; App.tsx is the only consumer. */
 
 import type { ReactNode } from "react";
+import {
+  Card as CardSurface,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge as BadgeSurface } from "@/components/ui/badge";
+import { Button as ButtonSurface } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 
 export function Card({
   title,
@@ -14,33 +31,45 @@ export function Card({
   accent?: string;
 }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-      <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          {accent ? <span className="h-2.5 w-2.5 rounded-full" style={{ background: accent }} /> : null}
+    <CardSurface className="gap-0 rounded-lg border border-slate-200 bg-white py-0 shadow-sm ring-0">
+      <CardHeader className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5">
+        <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          {accent ? (
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: accent }} />
+          ) : null}
           {title}
-        </h2>
-        {meta ? <div className="text-xs text-slate-500">{meta}</div> : null}
-      </header>
-      <div className="px-4 py-3">{children}</div>
-    </section>
+        </CardTitle>
+        {meta ? <CardAction className="self-center text-xs text-slate-500">{meta}</CardAction> : null}
+      </CardHeader>
+      <CardContent className="px-4 py-3">{children}</CardContent>
+    </CardSurface>
   );
 }
 
-export function Badge({ children, tone = "slate" }: { children: ReactNode; tone?: string }) {
-  const tones: Record<string, string> = {
-    slate: "bg-slate-100 text-slate-700 border-slate-200",
-    green: "bg-emerald-50 text-emerald-800 border-emerald-200",
-    amber: "bg-amber-50 text-amber-900 border-amber-200",
-    red: "bg-red-50 text-red-800 border-red-200",
-    blue: "bg-blue-50 text-blue-900 border-blue-200",
-  };
+const TONES = {
+  slate: "border-slate-200 bg-slate-100 text-slate-700",
+  green: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  amber: "border-amber-200 bg-amber-50 text-amber-900",
+  red: "border-red-200 bg-red-50 text-red-800",
+  blue: "border-blue-200 bg-blue-50 text-blue-900",
+} as const;
+
+type Tone = keyof typeof TONES;
+
+export function Badge({ children, tone = "slate" }: { children: ReactNode; tone?: Tone }) {
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${tones[tone]}`}>
+    <BadgeSurface variant="outline" className={`rounded-full px-2 py-0.5 ${TONES[tone]}`}>
       {children}
-    </span>
+    </BadgeSurface>
   );
 }
+
+// The app's "ghost" is an outlined secondary button, not a bare one — it maps to
+// shadcn's "outline" rather than its "ghost".
+const BUTTON_SURFACE = {
+  primary: "bg-blue-700 text-white hover:bg-blue-800 hover:text-white",
+  ghost: "border-slate-300 bg-white text-slate-800 hover:bg-slate-50 hover:text-slate-800",
+} as const;
 
 export function Button({
   children,
@@ -52,19 +81,19 @@ export function Button({
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
-  variant?: "primary" | "ghost";
+  variant?: keyof typeof BUTTON_SURFACE;
   type?: "button" | "submit";
 }) {
-  const base =
-    "focus-ring inline-flex min-h-11 items-center justify-center rounded-md px-4 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
-  const styles =
-    variant === "primary"
-      ? "bg-blue-700 text-white hover:bg-blue-800"
-      : "border border-slate-300 bg-white text-slate-800 hover:bg-slate-50";
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${styles}`}>
+    <ButtonSurface
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      variant={variant === "primary" ? "default" : "outline"}
+      className={`min-h-11 px-4 ${BUTTON_SURFACE[variant]}`}
+    >
       {children}
-    </button>
+    </ButtonSurface>
   );
 }
 
@@ -75,19 +104,7 @@ export function ProgressBar({ pct, message }: { pct: number; message: string }) 
         <span>{message}</span>
         <span className="font-mono tabular-nums text-slate-500">{pct}%</span>
       </div>
-      <div
-        role="progressbar"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={message}
-        className="h-2 w-full overflow-hidden rounded-full bg-slate-200"
-      >
-        <div
-          className="h-full rounded-full bg-blue-700 transition-[width] duration-500"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+      <Progress value={pct} aria-label={message} className="h-2 rounded-full bg-slate-200" />
     </div>
   );
 }

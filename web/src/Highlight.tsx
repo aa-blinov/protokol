@@ -19,7 +19,7 @@ const KNOWN_TYPES = new Set([
   "BIRTH_CERTIFICATE",
 ]);
 
-const chipClass = (type: string) => `chip ${KNOWN_TYPES.has(type) ? `chip-${type}` : "chip-OTHER"}`;
+export const chipClass = (type: string) => `chip ${KNOWN_TYPES.has(type) ? `chip-${type}` : "chip-OTHER"}`;
 
 interface Piece {
   text: string;
