@@ -74,37 +74,31 @@ macOS. Свой интерпретатор можно подставить че�
 библиотек во временный каталог при каждом запуске. Для приложения, которое
 открывают весь день, это лишние секунды при старте.
 
-## Модели (не входят в бандл, ~1.6 ГБ)
+## Модели (~1.5 ГБ) вшиваются в бандл
 
-В приложение их нет намеренно. Каталог зависит от платформы:
+На этапе сборки каталог `models/` копируется внутрь приложения — туда же, куда
+ложатся Python-сайдкар, онникс-рантайм, библиотеки разбора аудио (PyAV несёт в
+себе FFmpeg) и собранный веб-интерфейс. Отдельно ставить нечего, при запуске
+ничего не докачивается, сеть не нужна.
 
-| Платформа | Каталог моделей |
-| --- | --- |
-| macOS | `~/Library/Application Support/STT PII/models/` |
-| Linux | `~/.config/STT PII/models/` |
+Что лежит внутри (`resources/` в Linux-сборке, `Contents/Resources/` в `.app`):
 
 ```
-<каталог моделей>/
-├── gigaam/        v3_e2e_ctc.onnx + vocab + config
-└── rubert-pii/    model.optimized.fp32.onnx + tokenizer + config
+resources/
+├── models/
+│   ├── gigaam/        v3_e2e_ctc.onnx + vocab + config
+│   └── rubert-pii/    model.optimized.fp32.onnx + tokenizer + config
+├── sidecar/sttshka-api/   сайдкар (PyInstaller onedir) + _internal
+└── web/                   собранный веб-интерфейс
 ```
 
-Положить:
+Из-за этого модели обязаны быть на месте **до** сборки: `./desktop/build.sh`
+падает с понятной ошибкой и ссылкой на `./download_models.sh`, если чего-то не
+хватает. Копировать их руками в каталоги приложения не нужно.
 
-```bash
-./download_models.sh
-
-# macOS
-mkdir -p ~/Library/Application\ Support/STT\ PII/models
-cp -R models/* ~/Library/Application\ Support/STT\ PII/models/
-
-# Linux
-mkdir -p ~/.config/"STT PII"/models
-cp -R models/* ~/.config/"STT PII"/models/
-```
-
-Если моделей нет, сервер отвечает, но `/api/transcribe` вернёт `503` с понятным
-текстом (`STT model unavailable: ...`), а не молча упадёт.
+Если моделей в готовой сборке почему-то нет, сервер всё равно стартует, но
+`/api/transcribe` вернёт `503` с понятным текстом (`STT model unavailable: ...`),
+а не молча упадёт. Проверить собранное приложение целиком: `./desktop/verify.sh`.
 
 ## Производительность на Apple Silicon
 
