@@ -1,0 +1,193 @@
+# Десктопное приложение (macOS Apple Silicon + Linux)
+
+Нативное приложение с двойным кликом: без Docker, без терминала. Electron рисует
+окно, рядом крутится Python-процесс (FastAPI + ONNX), который делает всю обработку.
+Основная цель — MacBook на Apple Silicon; под Linux путь тоже собирается и проверен.
+
+```
+Electron окно  ──HTTP 127.0.0.1──►  Python sidecar (FastAPI + ONNX)
+                                        │
+                                        ├─ STT:  GigaAM v3 e2e-ctc  (onnx-asr)
+                                        ├─ PII:  ruBERT PII NER     (onnxruntime)
+                                        └─ LLM:  OpenRouter (только маскированный текст)
+```
+
+Слушает только `127.0.0.1`. Ничего не поднимается наружу, прокси и CORS не нужны:
+sidecar сам отдаёт собранный веб-интерфейс.
+
+## Сборка платформа-за-платформой, не кросс-компиляция
+
+Electron кросс-платформенный, но бандл — нет. Каждая платформа собирается на себе:
+
+- **PyInstaller не кросс-компилируется.** Бинарь Python получается только под ту ОС и
+  архитектуру, где идёт сборка. То же самое с `onnxruntime`: под macOS свои колёса,
+  и именно установка на маке делает доступным CoreML.
+- **`electron-builder` для `target: mac`** требует macOS: кодирование, подпись и
+  нотариальное завершение делаются инструментами Xcode.
+
+Поэтому `./desktop/build-macos.sh` запускается **на том MacBook**, где будет работать
+приложение. Под Linux всё собирается на Linux: `./desktop/build.sh --linux` даёт
+`AppImage` и `deb`, и этот путь проверен (см. ниже).
+
+## Что нужно
+
+**macOS (основная цель):**
+- macOS 13+, Apple Silicon (M1/M2/M3/M4)
+- Node.js (`brew install node`)
+- Python 3.11+ (`brew install python@3.12`)
+- Xcode Command Line Tools (`xcode-select --install`) — для кодирования `.app`
+
+**Linux:**
+- Node.js, Python 3.11+, `ffmpeg` (декодирование аудио)
+- для сборки `deb` — `fakeroot`/`dpkg`; для запуска `AppImage` — FUSE
+
+Rust не нужен: оболочка на Electron.
+
+## Сборка
+
+```bash
+./desktop/build.sh          # цель выбирается по платформе автоматически
+./desktop/build.sh --mac    # принудительно mac (только на маке)
+./desktop/build.sh --linux  # принудительно linux
+```
+
+`build-macos.sh` и `verify-macos.sh` — тонкие обёртки над `build.sh --mac` и
+`verify.sh`, оставлены как документированные точки входа.
+
+Скрипт проходит четыре шага и сам проверяет окружение:
+
+1. `web/` → `npm run build` (собранный интерфейс)
+2. `api/` → PyInstaller → `api/dist/sttshka-api/` (Python-процесс, **onedir**)
+3. `desktop/` → `electron-builder` (цель под текущую платформу)
+4. Печатает, куда класть модели
+
+Python-зависимости ставятся в локальный `api/.venv`, который скрипт создаёт сам,
+если его нет. Это не случайность: `pip install` в системный Python сейчас падает с
+`externally-managed-environment` (PEP 668) — и на Linux, и на Homebrew-питоне под
+macOS. Свой интерпретатор можно подставить через `STTSHKA_PYTHON=/путь/к/python`.
+
+Результат:
+- macOS: `desktop/release/STT PII-<version>-arm64.dmg` и распакованный `.app`
+- Linux: `desktop/release/*<version>*.AppImage`, `*.deb` и `linux-unpacked/`
+
+`onedir`, а не `onefile`: однофайловый бандл распаковывает ~200 МБ нативных
+библиотек во временный каталог при каждом запуске. Для приложения, которое
+открывают весь день, это лишние секунды при старте.
+
+## Модели (не входят в бандл, ~1.6 ГБ)
+
+В приложение их нет намеренно. Каталог зависит от платформы:
+
+| Платформа | Каталог моделей |
+| --- | --- |
+| macOS | `~/Library/Application Support/STT PII/models/` |
+| Linux | `~/.config/STT PII/models/` |
+
+```
+<каталог моделей>/
+├── gigaam/        v3_e2e_ctc.onnx + vocab + config
+└── rubert-pii/    model.optimized.fp32.onnx + tokenizer + config
+```
+
+Положить:
+
+```bash
+./download_models.sh
+
+# macOS
+mkdir -p ~/Library/Application\ Support/STT\ PII/models
+cp -R models/* ~/Library/Application\ Support/STT\ PII/models/
+
+# Linux
+mkdir -p ~/.config/"STT PII"/models
+cp -R models/* ~/.config/"STT PII"/models/
+```
+
+Если моделей нет, сервер отвечает, но `/api/transcribe` вернёт `503` с понятным
+текстом (`STT model unavailable: ...`), а не молча упадёт.
+
+## Производительность на Apple Silicon
+
+Инференс переведён на **CoreML** (`CoreMLExecutionProvider`) — ради этого и
+делается нативная сборка, а не Docker. `onnxruntime` берёт CoreML первым, а всё,
+что он не смог туда отдать, считает на CPU.
+
+Если что-то работает не так, вернуть на CPU без пересборки:
+
+```bash
+USE_COREML=0 open "/Applications/STT PII.app"
+```
+
+Какой провайдер реально подхватился — видно в `GET /api/health`: `providers`
+показывает, что запрошено, а `ner_provider` — что onnxruntime взял по факту
+(заполняется после первого `/api/mask`, `null` раньше).
+
+> Внимание: путь CoreML проверен на уровне кода (корректный выбор провайдера,
+> автоматический откат на CPU), но **на реальном Apple Silicon не гонялся** — эта
+> машина Linux x86_64. Если модель поведёт себя странно, первым делом выключите
+> CoreML флагом выше; CPU-путь полностью протестирован.
+
+## Если macOS ругается на подпись
+
+Приложение собирается **без** нотариального заверения (для него нужен Apple
+Developer ID и сеть Apple). Поэтому при первом запуске macOS напишет, что
+разработчик неизвестен.
+
+Локально для себя:
+
+```bash
+xattr -cr "/Applications/STT PII.app"
+```
+
+либо щёлкнуть правой кнопкой → «Открыть» → подтвердить.
+
+Чтобы убрать это полностью, нужен `Developer ID Application` сертификат и
+`notarytool` — отдельная процедура, сюда не включена. Для личного инструмента
+`xattr -cr` достаточен.
+
+## Структура проекта
+
+| Путь | Что это |
+| --- | --- |
+| `desktop/main.js` | Оболочка: ищет свободный порт, запускает sidecar, ждёт `/api/health`, открывает окно |
+| `desktop/package.json` | `electron-builder` конфиг: цели `mac/arm64` и `linux` (AppImage, deb) |
+| `desktop/build.sh`, `desktop/verify.sh` | Сборка и проверка под текущую платформу; `build-macos.sh`/`verify-macos.sh` — обёртки |
+| `desktop/entitlements.mac.plist` | Hardened runtime: JIT, локальная сеть, чтение файлов |
+| `api/sttshka-api.spec` | PyInstaller spec для sidecar |
+| `api/main.py` | `__main__`-блок читает `PORT`/`HOST` — оболочке достаточно породить бинарь |
+
+## Отладка
+
+Запуск из исходников (модели из репозитория, Python из `PATH`):
+
+```bash
+cd web && npm run build
+cd ../desktop && STTSHKA_PYTHON=python3 npx electron .
+```
+
+Оболочка печатает адрес sidecar в stdout:
+
+```
+[sttshka] sidecar ready on http://127.0.0.1:52341
+```
+
+Если приложение не стартует, оно покажет диалог с хвостом лога sidecar — там и
+причина (обычно: нет моделей, либо не тот Python).
+
+> Заметка для Linux: в контейнере/CI Electron требует `--no-sandbox` (там не
+> настроен SUID-песочница) — `npx electron . --no-sandbox`. На macOS этого флага
+> не нужно и работать он будет без него.
+>
+> Там же в окружении без GPU нужен `--in-process-gpu`: без него отдельный
+> GPU-процесс падает с «GPU process isn't usable» и приложение закрывается.
+> Оба флага нужны только в таком окружении — на обычном Linux-десктопе и на macOS
+> приложение стартует без них.
+
+Проверка готовой сборки на любой платформе:
+
+```bash
+./desktop/verify.sh
+```
+
+Она проверяет бандл, модели, реальный инференс и какой провайдер подхватился,
+и завершается ненулевым кодом при любой ошибке.

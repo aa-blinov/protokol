@@ -1,0 +1,54 @@
+{
+  "name": "sttshka-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "STT → PII → OpenRouter — нативное приложение для macOS (Apple Silicon)",
+  "homepage": "https://github.com/aa-blinov/sttshka",
+  "main": "main.js",
+  "author": "sttshka",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:mac:arm64": "electron-builder --mac dmg zip --arm64"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "monster.blinov.sttshka",
+    "productName": "STT PII",
+    "executableName": "sttshka",
+    "directories": { "output": "release" },
+    "files": ["main.js"],
+    "extraResources": [
+      { "from": "../api/dist/sttshka-api", "to": "sidecar/sttshka-api", "filter": ["**/*"] },
+      { "from": "../web/dist", "to": "web", "filter": ["**/*"] },
+      { "from": "../models", "to": "models", "filter": ["**/*", "!**/__pycache__/**", "!**/*.pyc"] }
+    ],
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["arm64"] },
+        { "target": "zip", "arch": ["arm64"] }
+      ],
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "minimumSystemVersion": "13.0"
+    },
+    "dmg": {
+      "title": "STT PII",
+      "backgroundColor": "#ffffff"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Office",
+      "synopsis": "STT → PII → OpenRouter",
+      "maintainer": "sttshka",
+      "executableName": "sttshka"
+    }
+  }
+}

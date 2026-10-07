@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!-- V8 needs to JIT; Electron is unusable without this under hardened runtime. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <!-- Loads Electron's own helper frameworks, which are not all signed with the
+         same identity as the app. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <!-- Outbound calls to OpenRouter happen from the Python sidecar. -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <!-- Reading the user's recording and the model folder. -->
+    <key>com.apple.security.files.user-selected.read-only</key>
+    <true/>
+  </dict>
+</plist>

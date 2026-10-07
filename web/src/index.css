@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+/* Convention mode: an internal tool. Neutral surface, one accent for actions,
+   colour reserved for entity types and state. Fonts are system stacks so the
+   layout never depends on a CDN. */
+@theme {
+  --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
+  --color-ink: #0f172a;
+  --color-paper: #f1f5f9;
+  --color-accent: #1d4ed8;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Placeholder chips in the masked text. Colour maps to entity type. */
+.chip {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 0.25rem;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.chip-PERSON { background: #dbeafe; border-color: #93c5fd; color: #1e3a8a; }
+.chip-ADDRESS { background: #dcfce7; border-color: #86efac; color: #14532d; }
+.chip-PHONE { background: #fef3c7; border-color: #fcd34d; color: #78350f; }
+.chip-EMAIL { background: #ede9fe; border-color: #c4b5fd; color: #4c1d95; }
+.chip-PASSPORT,
+.chip-INN,
+.chip-SNILS,
+.chip-OMS,
+.chip-CARD,
+.chip-DRIVER_LICENSE,
+.chip-MILITARY_ID,
+.chip-BIRTH_CERTIFICATE { background: #fee2e2; border-color: #fca5a5; color: #7f1d1d; }
+.chip-URL,
+.chip-IP { background: #e2e8f0; border-color: #cbd5e1; color: #0f172a; }
+.chip-OTHER { background: #f1f5f9; border-color: #cbd5e1; color: #334155; }
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
