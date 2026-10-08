@@ -40,6 +40,10 @@ from av.error import FFmpegError
 import config
 
 MODEL_NAME = "gigaam-v3-e2e-ctc"
+# int8 weights: on our tests the same accuracy as fp32 (0% WER clean, +0.8 pp at
+# 0 dB noise — one word in 122), but the model loads ~0.5 GB lighter (225 MB on
+# disk vs 845 MB) and the bundle shrinks with it. On a 16 GB laptop that matters.
+QUANTIZATION = "int8"
 TARGET_SAMPLE_RATE = 16_000
 MAX_AUDIO_SECONDS = 60 * 60  # one hour; a meeting, not a call centre
 
@@ -65,6 +69,7 @@ class Stt:
             path=self.model_dir,
             sess_options=options,
             providers=config.ort_providers(),
+            quantization=QUANTIZATION,
         )
 
     def transcribe(self, audio: bytes, suffix: str = ".wav") -> tuple[str, float]:

@@ -52,7 +52,7 @@ if [ -f "$RESOURCES/web/index.html" ]; then ok "веб-интерфейс упа
 section "Модели ($MODELS_DIR)"
 MISSING=0
 for f in \
-  "gigaam/v3_e2e_ctc.onnx" \
+  "gigaam/v3_e2e_ctc.int8.onnx" \
   "gigaam/v3_e2e_ctc_vocab.txt" \
   "gigaam/config.json" \
   "rubert-pii/model.optimized.fp32.onnx" \

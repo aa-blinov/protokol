@@ -20,8 +20,9 @@ PII="https://huggingface.co/lockR/rubert-base-pii-ner-onnx/resolve/main"
 
 # GigaAM v3 E2E CTC. The e2e variant is required: it normalises dictated digits
 # so the PII model can recognise phone/passport/INN numbers at all. The plain
-# v3_ctc model leaves them as words and they leak unmasked.
-fetch "$GIGAAM/v3_e2e_ctc.onnx"         models/gigaam/v3_e2e_ctc.onnx
+# v3_ctc model leaves them as words and they leak unmasked. The int8 export is
+# used: same accuracy on our tests, ~0.5 GB lighter to load.
+fetch "$GIGAAM/v3_e2e_ctc.int8.onnx"    models/gigaam/v3_e2e_ctc.int8.onnx
 fetch "$GIGAAM/v3_e2e_ctc_vocab.txt"    models/gigaam/v3_e2e_ctc_vocab.txt
 fetch "$GIGAAM/config.json"             models/gigaam/config.json
 
