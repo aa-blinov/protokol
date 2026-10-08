@@ -5,8 +5,10 @@ CPU-only and ONNX, like the rest of the pipeline — no torch, no GPU:
 * ``onnx-community/pyannote-segmentation-3.0`` marks where the speaker changes
   (its powerset head emits no-speech / speaker-1..3 / two-speaker frames);
 * 3D-Speaker ``ERes2Net`` turns each speech turn into a voice embedding;
-* single-linkage clustering over cosine similarity groups the turns into the
-  recording's speakers.
+* average-linkage clustering over cosine similarity groups the turns into the
+  recording's speakers, and clusters that are a sliver of the recording are
+  folded into their nearest neighbour — on a noisy call the same voice lands in
+  several small clusters and would otherwise read as a dozen speakers.
 
 The segmentation model's own speaker indices are local — up to three per 10 s
 window, re-numbered window to window — so they only say *where* a turn begins
@@ -49,6 +51,12 @@ _CLUSTER_THRESHOLD = 0.8
 # A cluster this small (in turns) is noise, not a speaker; fold it into the
 # nearest one instead of inventing a speaker for it.
 _MIN_CLUSTER_TURNS = 2
+# A cluster holding less than this share of the recording's speech is a
+# fragment, not a speaker — fold it into its nearest neighbour. On a noisy
+# phone call the similarity threshold still leaves a long tail of such slivers
+# (one voice split into a dozen), while every real speaker on the reference
+# recordings holds well above this line, so the fold leaves them untouched.
+_MIN_CLUSTER_SHARE = 0.03
 
 
 @dataclass(frozen=True)
@@ -128,6 +136,54 @@ def cluster_embeddings(embeddings: np.ndarray, threshold: float = _CLUSTER_THRES
         for index in members:
             labels[index] = speaker
     return labels
+
+
+def fold_small_clusters(
+    embeddings: np.ndarray,
+    labels: list[int],
+    weights: list[float],
+    min_share: float = _MIN_CLUSTER_SHARE,
+) -> list[int]:
+    """Fold clusters that are a sliver of the recording into their nearest neighbour.
+
+    A noisy recording (a phone call, overlapping speech, cross-talk) still leaves
+    a long tail of clusters each holding a few seconds — fragments of a voice,
+    not speakers. The turn-count fold above cannot see them (they have several
+    turns) and lowering the similarity threshold would merge genuinely distinct
+    voices, so this separates by *share of the recording's speech*: a cluster
+    under ``min_share`` of the total is a fragment and joins the cluster it is
+    most similar to. Real speakers hold far more than that share, so clean
+    recordings are returned unchanged.
+    """
+    if len(embeddings) == 0 or min_share <= 0:
+        return labels
+    total = float(sum(weights))
+    if total <= 0:
+        return labels
+    normalized = embeddings / (np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-9)
+    similarity = normalized @ normalized.T
+    groups: dict[int, list[int]] = {}
+    for index, label in enumerate(labels):
+        groups.setdefault(label, []).append(index)
+
+    def seconds(members: list[int]) -> float:
+        return float(sum(weights[i] for i in members))
+
+    while len(groups) > 1:
+        small = [label for label, members in groups.items() if seconds(members) / total < min_share]
+        if not small:
+            break
+        label = min(small, key=lambda l: seconds(groups[l]))
+        others = [o for o in groups if o != label]
+        target = max(others, key=lambda o: float(similarity[np.ix_(groups[label], groups[o])].mean()))
+        groups[target] = groups[target] + groups[label]
+        del groups[label]
+
+    result = [0] * len(labels)
+    for new_label, members in enumerate(groups.values()):
+        for index in members:
+            result[index] = new_label
+    return result
 
 
 class Diarizer:
@@ -212,12 +268,12 @@ class Diarizer:
                 [self._embed(samples[int(t.start * SAMPLE_RATE) : int(t.end * SAMPLE_RATE)]) for t in long_enough]
             )
             labels = cluster_embeddings(embeddings, self.cluster_threshold)
+            labels = fold_small_clusters(embeddings, labels, [t.end - t.start for t in long_enough])
             labelled = [Turn(t.start, t.end, label) for t, label in zip(long_enough, labels)]
+            embedded = {id(t) for t in long_enough}
             # Short turns borrow the speaker of the nearest labelled turn in time.
             for turn in turns:
-                if (turn.end - turn.start) >= _MIN_EMBED_SECONDS:
-                    continue
-                if not labelled:
+                if id(turn) in embedded or not labelled:
                     continue
                 nearest = min(labelled, key=lambda l: min(abs(l.start - turn.end), abs(turn.start - l.end)))
                 labelled.append(Turn(turn.start, turn.end, nearest.speaker))

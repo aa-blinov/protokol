@@ -40,7 +40,8 @@ The mechanism a neighbouring product could not truthfully copy: **PII never reac
 - Two UI screenshots of the real app (`docs/screenshots/app-results.png`, `docs/screenshots/app-empty.png`).
 - Wire-level proof that raw PII never crossed to the LLM: a proxied end-to-end run logged the actual request body, which contained only tokens (`PERSON_1`, `PHONE_1`) and zero occurrences of the raw values; the reply was de-masked locally to the real values. Re-verified on a 10-minute meeting and on a diarized two-speaker recording (zero raw names/phones in the request body).
 - Speaker diarization verified on a 75-second two-speaker recording built from real Common Voice ru voices: 2 speakers found, 0% speaker confusion (all residual DER is silence inside the reference turns).
-- 37 passing unit/integration tests; end-to-end runs against the live LLM provider.
+- Diarization stability on a real noisy 12-minute phone call (`Запись звонка N3763`): clustering alone returned 20 speakers (one voice fragmented into a dozen slivers); folding clusters under ~3% of the speech brings it to 4 without changing the 2- and 3-speaker reference results (confusion 1.9% / 1.4%).
+- 62 passing unit/integration tests; end-to-end runs against the live LLM provider.
 - **Absence to respect:** there are no customers, testimonials, benchmarks, pricing, or market claims. This is a private personal tool. Future work must not fabricate any of these.
 
 ## Product Principles

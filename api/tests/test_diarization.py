@@ -14,7 +14,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from diarization import Turn, cluster_embeddings, merge_turns  # noqa: E402
+from diarization import Turn, cluster_embeddings, fold_small_clusters, merge_turns  # noqa: E402
 
 
 def test_merge_turns_joins_same_speaker_across_a_short_gap():
@@ -55,3 +55,31 @@ def test_cluster_embeddings_keeps_one_speaker_together():
 
 def test_cluster_embeddings_empty():
     assert cluster_embeddings(np.zeros((0, 3))) == []
+
+
+def _unit(angle: float) -> list[float]:
+    return [float(np.cos(angle)), float(np.sin(angle))]
+
+
+def test_cluster_embeddings_default_separates_clear_voices():
+    # Two tight groups ~57° apart (cosine ~0.54) must stay apart at the default.
+    embeddings = np.array([_unit(0.0), _unit(0.15), _unit(1.0), _unit(1.15)])
+    labels = cluster_embeddings(embeddings)
+    assert len(set(labels)) == 2
+
+
+def test_fold_small_clusters_absorbs_a_sliver_into_its_nearest_neighbour():
+    # A and B are real speakers (10 s each); C is a 0.2 s fragment closest to A.
+    embeddings = np.array([_unit(0.0), _unit(0.1), _unit(1.2), _unit(1.3), _unit(0.05), _unit(0.15)])
+    labels = [0, 0, 1, 1, 2, 2]
+    weights = [10.0, 10.0, 10.0, 10.0, 0.1, 0.1]
+    folded = fold_small_clusters(embeddings, labels, weights, min_share=0.03)
+    assert len(set(folded)) == 2
+    assert folded[4] == folded[0]  # the fragment joined the cluster it resembles
+    assert folded[2] != folded[0]
+
+
+def test_fold_small_clusters_leaves_real_speakers_alone():
+    embeddings = np.array([_unit(0.0), _unit(0.1), _unit(1.2), _unit(1.3)])
+    labels = [0, 0, 1, 1]
+    assert fold_small_clusters(embeddings, labels, [8.0, 8.0, 8.0, 8.0], min_share=0.03) == labels
