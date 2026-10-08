@@ -86,6 +86,27 @@ class MaskResult:
     entities: list[MaskedEntity]
 
 
+def resolve_overlaps(spans: list[Span]) -> list[Span]:
+    """Drop spans that overlap a kept one, preferring the longer span.
+
+    The NER model and the rule recognizers can propose overlapping spans for the
+    same characters. Masking both would make ``mask`` index the same text twice
+    and corrupt the output, so one wins: the longer span, since it hides the most
+    complete identifier. Ties go to the higher-confidence span.
+    """
+    kept: list[Span] = []
+    for span in sorted(spans, key=lambda s: (s.start, s.end)):
+        if span.end <= span.start:
+            continue
+        if kept and span.start < kept[-1].end:
+            previous = kept[-1]
+            if (span.end - span.start) > (previous.end - previous.start):
+                kept[-1] = span
+            continue
+        kept.append(span)
+    return kept
+
+
 def merge_spans(text: str, spans: list[Span]) -> list[Span]:
     """Merge overlapping or whitespace-adjacent spans that share a display type.
 
@@ -120,7 +141,7 @@ def mask(text: str, spans: list[Span]) -> MaskResult:
     The same surface string always maps to the same token, so a repeated name
     stays consistent throughout the text.
     """
-    merged = merge_spans(text, spans)
+    merged = merge_spans(text, resolve_overlaps(spans))
     counters: dict[str, int] = {}
     known: dict[str, str] = {}
     pieces: list[str] = []

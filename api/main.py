@@ -22,6 +22,7 @@ from diarization import Diarizer
 from llm import DEFAULT_MODEL, LlmError, OpenRouterClient
 from masking import mask, unmask
 from ner import PiiNer
+from rules import find_structured
 from stt import MAX_AUDIO_SECONDS, TARGET_SAMPLE_RATE, Stt
 
 log = logging.getLogger("sttshka")
@@ -103,6 +104,16 @@ def _entities_out(result) -> list[schemas.Entity]:
     return [schemas.Entity(**vars(entity)) for entity in result.entities]
 
 
+def _spans(text: str) -> list:
+    """Every span to mask: the NER model's, plus the deterministic rules'.
+
+    The rules exist because the model's own weak spots (IP, INN, SNILS,
+    passport) are structured, machine-checkable identifiers — a missed one is a
+    leak. ``mask`` resolves any overlap between the two sources.
+    """
+    return get_ner().predict(text) + find_structured(text)
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {
@@ -135,7 +146,7 @@ async def transcribe(file: UploadFile = File(...)) -> schemas.TranscribeResponse
 
 @app.post("/api/mask", response_model=schemas.MaskResponse)
 def mask_text(request: schemas.MaskRequest) -> schemas.MaskResponse:
-    spans = get_ner().predict(request.text)
+    spans = _spans(request.text)
     result = mask(request.text, spans)
     return schemas.MaskResponse(
         masked_text=result.masked_text,
@@ -220,7 +231,7 @@ async def process(
 
             started = time.perf_counter()
             yield _line("mask", 45, "Маскирование персональных данных")
-            result = mask(text, get_ner().predict(text))
+            result = mask(text, _spans(text))
             timings["mask"] = round(time.perf_counter() - started, 2)
 
             started = time.perf_counter()

@@ -65,6 +65,14 @@ if [ "$MISSING" -eq 1 ]; then
   note "модели вшиваются при сборке: выполните ./download_models.sh и пересоберите ./desktop/build.sh"
 fi
 
+# Diarization ships as two small (~44 MB) optional models. Missing them is not
+# fatal — the app just cannot label speakers — so this is a note, not a failure.
+if [ -s "$MODELS_DIR/diarization/segmentation/model.onnx" ] && [ -s "$MODELS_DIR/diarization/embedding.onnx" ]; then
+  ok "модели диаризации на месте"
+else
+  note "модели диаризации не вшиты: разбивка по говорящим будет недоступна (./download_models.sh)"
+fi
+
 # ------------------------------------------- launch sidecar and probe it
 section "Запуск sidecar и инференс"
 if [ -z "$EXE" ]; then
@@ -104,6 +112,12 @@ else
   bad "health сообщает, что модели недоступны: $HEALTH"
 fi
 
+if printf '%s' "$HEALTH" | grep -q '"diarization":true'; then
+  ok "диаризация доступна"
+else
+  note "диаризация недоступна в этой сборке (модели не вшиты) — остальное работает"
+fi
+
 # Real inference: loads the NER model and reveals which provider it actually uses.
 MASK="$(curl -sS -m 120 -X POST -H 'Content-Type: application/json' \
   -d '{"text":"Мой номер телефона 8 900 123-45-67, а имя Иван Петров."}' \
@@ -113,6 +127,18 @@ if printf '%s' "$MASK" | grep -q '"masked_text":".*\[PERSON_1\]' && printf '%s' 
   ok "маскирование работает: Иван Петров -> [PERSON_1], номер -> [PHONE_1]"
 else
   bad "маскирование не сработало: $MASK"
+fi
+
+# The rule layer covers the structured identifiers the model misses (IP, INN,
+# SNILS, card). Check them by their tokens so a regression is caught here.
+STRUCT="$(curl -sS -m 120 -X POST -H 'Content-Type: application/json' \
+  -d '{"text":"ИНН 7707083893, СНИЛС 123-456-789 64, IP 192.168.0.1, карта 4111 1111 1111 1111."}' \
+  "http://127.0.0.1:$PORT/api/mask" 2>/dev/null)"
+if printf '%s' "$STRUCT" | grep -q '\[INN_1\]' && printf '%s' "$STRUCT" | grep -q '\[SNILS_1\]' \
+  && printf '%s' "$STRUCT" | grep -q '\[IP_1\]' && printf '%s' "$STRUCT" | grep -q '\[CARD_1\]'; then
+  ok "правила ловят структурные ПДн: ИНН, СНИЛС, IP, карта"
+else
+  bad "правила не сработали: $STRUCT"
 fi
 
 HEALTH2="$(curl -sS -m 10 "http://127.0.0.1:$PORT/api/health" 2>/dev/null)"
