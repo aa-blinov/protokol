@@ -143,7 +143,7 @@ File name as the title (`1.5rem` semibold, wraps), one mono meta line beneath, t
 The first run teaches the product, not just the drop zone: the brand mark, a value headline («Расшифровка встреч, которая не покидает ваш компьютер»), a one-line privacy promise, the three pipeline steps as mono labels (`01 · АУДИО  02 · МАСКИРОВАНИЕ  03 · ПРОТОКОЛ`), the primary CTA, and the accepted formats. One dashed target, now with a reason to trust it.
 
 ### Model reply
-The protocol arrives from the model as light Markdown. It is rendered, not dumped: `**bold**` lines become section subheadings, `- ` runs become bullet lists, inline `**`/`*` become strong/em, and `---` becomes a hairline. The raw `**` and `-` markers never reach the page.
+The protocol arrives from the model as Markdown. It is rendered, not dumped: `#`/`**bold**` lines become section subheadings, `- ` runs become bullet lists, `1.` runs become numbered lists, `| … |` + `|---|` becomes a real table, `> ` a quote, ```` ``` ```` a code block, `---` a hairline, and inline `**`/`*`/`` ` ``/`[..](..)` become strong/em/code/link. The raw Markdown markers never reach the page. The renderer is hand-rolled — a bounded GFM subset, no dependency — so the protocol keeps the document's own type instead of a library's defaults.
 
 ### Section
 A hairline above, a mono uppercase label, an optional right-aligned meta (token count, "Скопировать"), then the content. This replaces the card.

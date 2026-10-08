@@ -80,82 +80,239 @@ export function CopyButton({ text, label = "Скопировать" }: { text: s
   );
 }
 
-/** Inline emphasis for the model's light Markdown. */
-function inline(text: string): ReactNode[] {
+// The model answers in Markdown, so the renderer covers the constructs a
+// protocol actually uses: headings, bullet and numbered lists, tables, code,
+// quotes, rules, and inline emphasis/link/code. Hand-rolled to keep the app
+// dependency-free and to keep control of the document's own typography.
+const INLINE =
+  /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\n]+\*)|(_[^_\n]+_)|(~~[^~]+~~)|(\[[^\]]+\]\([^)\s]+\))/g;
+
+const TEXT = "text-[15px] leading-7 text-slate-800";
+
+/** Inline spans: code, bold, italic, strikethrough, links. */
+function renderInline(text: string): ReactNode {
   const nodes: ReactNode[] = [];
-  const pattern = /\*\*(.+?)\*\*|\*(.+?)\*/g;
   let last = 0;
   let key = 0;
-  let match: RegExpExecArray | null = pattern.exec(text);
+  INLINE.lastIndex = 0;
+  let match: RegExpExecArray | null = INLINE.exec(text);
   while (match !== null) {
     if (match.index > last) nodes.push(text.slice(last, match.index));
-    if (match[1] !== undefined) {
+    const token = match[0];
+    if (token.startsWith("`")) {
+      nodes.push(
+        <code key={key++} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.85em] text-slate-700">
+          {token.slice(1, -1)}
+        </code>,
+      );
+    } else if (token.startsWith("**") || token.startsWith("__")) {
       nodes.push(
         <strong key={key++} className="font-semibold text-slate-900">
-          {match[1]}
+          {token.slice(2, -2)}
         </strong>,
       );
+    } else if (token.startsWith("~~")) {
+      nodes.push(<del key={key++}>{token.slice(2, -2)}</del>);
+    } else if (token.startsWith("[")) {
+      const link = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(token);
+      nodes.push(
+        <a
+          key={key++}
+          href={link ? link[2] : "#"}
+          target="_blank"
+          rel="noreferrer"
+          className="text-blue-700 underline decoration-slate-300 underline-offset-2"
+        >
+          {link ? link[1] : token}
+        </a>,
+      );
     } else {
-      nodes.push(<em key={key++}>{match[2]}</em>);
+      nodes.push(<em key={key++}>{token.slice(1, -1)}</em>);
     }
-    last = match.index + match[0].length;
-    match = pattern.exec(text);
+    last = match.index + token.length;
+    match = INLINE.exec(text);
   }
   if (last < text.length) nodes.push(text.slice(last));
   return nodes;
 }
 
-/** The protocol arrives as light Markdown; render it as document text rather
- *  than showing the model's `**` and `-` markers verbatim. */
+function parseRow(line: string): string[] {
+  let value = line.trim();
+  if (value.startsWith("|")) value = value.slice(1);
+  if (value.endsWith("|")) value = value.slice(0, -1);
+  return value.split("|").map((cell) => cell.trim());
+}
+
+const isTableSeparator = (line: string): boolean =>
+  line.includes("-") && /^\s*\|?[\s:|-]+\|?\s*$/.test(line) && !/[^\s:|-]/.test(line);
+
+/** Renders the model's Markdown as the document's own typography. */
 export function Markdown({ text }: { text: string }) {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
-  let list: string[] = [];
-  const flush = () => {
-    if (list.length === 0) return;
+  const paragraph: string[] = [];
+  let i = 0;
+
+  const flushParagraph = () => {
+    if (paragraph.length === 0) return;
     blocks.push(
-      <ul key={`ul-${blocks.length}`} className="ml-4 mt-2 list-disc space-y-1 text-[15px] leading-7 text-slate-800">
-        {list.map((item, index) => (
-          <li key={index}>{inline(item)}</li>
-        ))}
-      </ul>,
+      <p key={`p${i}`} className={`mt-2 max-w-[68ch] ${TEXT}`}>
+        {renderInline(paragraph.join(" "))}
+      </p>,
     );
-    list = [];
+    paragraph.length = 0;
   };
-  text
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .forEach((raw, index) => {
-      const line = raw.trim();
-      if (line === "") {
-        flush();
-        return;
+
+  const takeWhile = (test: (line: string) => RegExpExecArray | null, items: string[]) => {
+    while (i < lines.length) {
+      const match = test(lines[i].trim());
+      if (!match) break;
+      items.push(match[1]);
+      i++;
+    }
+  };
+
+  while (i < lines.length) {
+    const raw = lines[i];
+    const line = raw.trim();
+
+    if (line === "") {
+      flushParagraph();
+      i++;
+      continue;
+    }
+
+    if (/^```/.test(line)) {
+      flushParagraph();
+      const code: string[] = [];
+      i++;
+      while (i < lines.length && !/^```/.test(lines[i].trim())) {
+        code.push(lines[i]);
+        i++;
       }
-      const bullet = /^[-*•]\s+(.*)$/.exec(line);
-      if (bullet) {
-        list.push(bullet[1]);
-        return;
-      }
-      flush();
-      if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(line)) {
-        blocks.push(<hr key={`hr-${index}`} className="my-5 border-t border-slate-200" />);
-        return;
-      }
-      const heading = /^(#{1,6})\s+(.*)$/.exec(line) ?? /^\*\*(.+?)\*\*:?$/.exec(line);
-      if (heading) {
-        blocks.push(
-          <h4 key={`h-${index}`} className="mt-5 font-semibold tracking-tight text-slate-900">
-            {inline(heading[2] ?? heading[1])}
-          </h4>,
-        );
-        return;
+      i++;
+      blocks.push(
+        <pre
+          key={`c${i}`}
+          className="mt-2 max-w-[68ch] overflow-x-auto rounded border border-slate-200 bg-slate-50 p-3 font-mono text-[13px] leading-6 text-slate-700"
+        >
+          <code>{code.join("\n")}</code>
+        </pre>,
+      );
+      continue;
+    }
+
+    if (line.includes("|") && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      flushParagraph();
+      const header = parseRow(line);
+      const rows: string[][] = [];
+      i += 2;
+      while (i < lines.length && lines[i].trim().includes("|") && lines[i].trim() !== "") {
+        rows.push(parseRow(lines[i]));
+        i++;
       }
       blocks.push(
-        <p key={`p-${index}`} className="mt-2 max-w-[68ch] text-[15px] leading-7 text-slate-800">
-          {inline(line)}
-        </p>,
+        <div key={`t${i}`} className="mt-3 max-w-[68ch] overflow-x-auto">
+          <table className={`w-full border-collapse ${TEXT}`}>
+            <thead>
+              <tr>
+                {header.map((cell, column) => (
+                  <th
+                    key={column}
+                    className="border-b border-slate-200 px-2 py-1 text-left font-semibold text-slate-900"
+                  >
+                    {renderInline(cell)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={index}>
+                  {row.map((cell, column) => (
+                    <td key={column} className="border-b border-slate-100 px-2 py-1 align-top">
+                      {renderInline(cell)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
       );
-    });
-  flush();
+      continue;
+    }
+
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line) ?? /^\*\*(.+?)\*\*:?$/.exec(line);
+    if (heading) {
+      flushParagraph();
+      blocks.push(
+        <h4 key={`h${i}`} className="mt-5 font-semibold tracking-tight text-slate-900">
+          {renderInline(heading[2] ?? heading[1])}
+        </h4>,
+      );
+      i++;
+      continue;
+    }
+
+    if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(line)) {
+      flushParagraph();
+      blocks.push(<hr key={`r${i}`} className="my-5 border-t border-slate-200" />);
+      i++;
+      continue;
+    }
+
+    if (/^>\s?/.test(line)) {
+      flushParagraph();
+      const quote: string[] = [];
+      while (i < lines.length && /^>\s?/.test(lines[i].trim())) {
+        quote.push(lines[i].trim().replace(/^>\s?/, ""));
+        i++;
+      }
+      blocks.push(
+        <blockquote key={`q${i}`} className="mt-2 max-w-[68ch] border-l-2 border-slate-300 pl-4 text-slate-600">
+          {renderInline(quote.join(" "))}
+        </blockquote>,
+      );
+      continue;
+    }
+
+    const ordered = /^\d+[.)]\s+(.*)$/.exec(line);
+    if (ordered) {
+      flushParagraph();
+      const items = [ordered[1]];
+      i++;
+      takeWhile((item) => /^\d+[.)]\s+(.*)$/.exec(item), items);
+      blocks.push(
+        <ol key={`o${i}`} className={`ml-5 mt-2 list-decimal space-y-1 ${TEXT}`}>
+          {items.map((item, index) => (
+            <li key={index}>{renderInline(item)}</li>
+          ))}
+        </ol>,
+      );
+      continue;
+    }
+
+    const bullet = /^[-*•+]\s+(.*)$/.exec(line);
+    if (bullet) {
+      flushParagraph();
+      const items = [bullet[1]];
+      i++;
+      takeWhile((item) => /^[-*•+]\s+(.*)$/.exec(item), items);
+      blocks.push(
+        <ul key={`u${i}`} className={`ml-5 mt-2 list-disc space-y-1 ${TEXT}`}>
+          {items.map((item, index) => (
+            <li key={index}>{renderInline(item)}</li>
+          ))}
+        </ul>,
+      );
+      continue;
+    }
+
+    paragraph.push(line);
+    i++;
+  }
+  flushParagraph();
   return <div>{blocks}</div>;
 }
 
