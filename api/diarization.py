@@ -169,6 +169,12 @@ class Diarizer:
         waveform = samples[None, :].astype(np.float32)
         window = int(_WINDOW_SECONDS * SAMPLE_RATE)
         overlap = int(_OVERLAP_SECONDS * SAMPLE_RATE)
+        # The segmentation model windows in fixed 10 s frames, so an input
+        # shorter than one window has to be padded (with silence) or the
+        # sliding-window view is larger than the array and raises. A short clip
+        # is single-speaker in practice; padding keeps it on the normal path.
+        if waveform.shape[1] < window:
+            waveform = np.pad(waveform, ((0, 0), (0, window - waveform.shape[1])))
         encoded = self._vad._encode(waveform, window, overlap)
         frames: list[tuple[int, int]] = []
         for begin, block in self._vad._decode((batch[0] for batch in encoded), window, overlap):
