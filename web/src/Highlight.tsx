@@ -41,9 +41,9 @@ function split(text: string, entities: Entity[]): Piece[] {
 }
 
 export function Highlighted({ text, entities }: { text: string; entities: Entity[] }) {
-  if (!entities.length) return <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">{text}</p>;
+  if (!entities.length) return <p className="whitespace-pre-wrap leading-7 text-slate-800">{text}</p>;
   return (
-    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
+    <p className="whitespace-pre-wrap leading-7 text-slate-800">
       {split(text, entities).map((piece, index) =>
         piece.entity ? (
           <mark
@@ -65,7 +65,7 @@ export function Highlighted({ text, entities }: { text: string; entities: Entity
 export function MaskedView({ text, entityMap }: { text: string; entityMap: Record<string, string> }) {
   const parts = text.split(/(\[[A-Z_]+_\d+\])/g);
   return (
-    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">
+    <p className="whitespace-pre-wrap leading-7 text-slate-800">
       {parts.map((part, index) => {
         const match = part.match(/^\[([A-Z_]+_\d+)\]$/);
         if (!match) return <span key={index}>{part}</span>;
