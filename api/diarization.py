@@ -57,6 +57,11 @@ _MIN_CLUSTER_TURNS = 2
 # (one voice split into a dozen), while every real speaker on the reference
 # recordings holds well above this line, so the fold leaves them untouched.
 _MIN_CLUSTER_SHARE = 0.03
+# Only trust the fold when the clustering is clearly over-segmented: at or below
+# this many clusters a small one is more likely a real, quiet speaker than a
+# fragment (measured on VoxConverse: folding unconditionally collapsed genuine
+# three-speaker recordings to one).
+_MAX_TRUSTED_SPEAKERS = 6
 
 
 @dataclass(frozen=True)
@@ -268,7 +273,10 @@ class Diarizer:
                 [self._embed(samples[int(t.start * SAMPLE_RATE) : int(t.end * SAMPLE_RATE)]) for t in long_enough]
             )
             labels = cluster_embeddings(embeddings, self.cluster_threshold)
-            labels = fold_small_clusters(embeddings, labels, [t.end - t.start for t in long_enough])
+            # Only fold slivers when the clustering is clearly over-segmented;
+            # at a small cluster count a small cluster is probably a real voice.
+            if len(set(labels)) > _MAX_TRUSTED_SPEAKERS:
+                labels = fold_small_clusters(embeddings, labels, [t.end - t.start for t in long_enough])
             labelled = [Turn(t.start, t.end, label) for t, label in zip(long_enough, labels)]
             embedded = {id(t) for t in long_enough}
             # Short turns borrow the speaker of the nearest labelled turn in time.
