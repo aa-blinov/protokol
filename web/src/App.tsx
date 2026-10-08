@@ -147,7 +147,7 @@ export default function App() {
             />
             <p className="text-sm font-medium text-slate-800">Перетащите запись звонка сюда</p>
             <p className="mt-1 text-sm text-slate-500">
-              WAV, MP3, M4A, OGG — до часа. Аудио обрабатывается локально.
+              WAV, MP3, M4A, OGG. Запись до часа, аудио обрабатывается локально.
             </p>
             <div className="mt-4">
               <Button onClick={() => inputRef.current?.click()} disabled={busy}>
@@ -172,7 +172,7 @@ export default function App() {
           {!result && !busy && !error ? (
             <EmptyState
               title="Результаты появятся здесь"
-              hint="Транскрипция, маскированный текст и ответ модели — три панели, чтобы было видно, что именно уходит в LLM."
+              hint="Здесь будет видно, что именно уходит в LLM: транскрипция, маскированный текст и ответ модели."
             />
           ) : null}
 
@@ -196,7 +196,7 @@ export default function App() {
               </Card>
 
               <Card
-                title="2 · Маскированный текст — именно он уходит в LLM"
+                title="2 · Маскированный текст (уходит в LLM)"
                 accent="#1d4ed8"
                 meta={
                   <span className="font-mono">
