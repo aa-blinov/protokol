@@ -8,7 +8,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP_NAME="STT PII"
+APP_NAME="Протокол"
 
 PASS=0
 FAIL=0

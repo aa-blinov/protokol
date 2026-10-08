@@ -1,5 +1,5 @@
 ---
-name: Стенограф
+name: Протокол
 description: Приватная расшифровка встреч — аудио → маскированный текст → LLM, всё локально
 colors:
   primary: "#1d4ed8"
@@ -55,13 +55,13 @@ components:
     padding: "2px 8px"
 ---
 
-# Design System: Стенограф
+# Design System: Протокол
 
 ## Overview
 
 **Creative North Star: "The Quiet Vault"**
 
-The product is called **Стенограф** — a private meeting transcriber. This is a trust instrument before it is a tool. The person using it is a banking executive handling other people's personal data; the interface must feel like a sealed, orderly vault — calm, exact, and quietly authoritative. Nothing decorative competes with the content. The visual restraint is the point: when the product's whole promise is "PII never leaves this machine," an interface that shouts undermines it. A quiet, precise surface reads as *safe to put sensitive audio into*. The header states the name and what it does (`Стенограф` / `Приватная расшифровка встреч`); the pipeline mechanics live in the empty-state hint, not in the title.
+The product is called **Протокол** — a private meeting transcriber. This is a trust instrument before it is a tool. The person using it is a banking executive handling other people's personal data; the interface must feel like a sealed, orderly vault — calm, exact, and quietly authoritative. Nothing decorative competes with the content. The visual restraint is the point: when the product's whole promise is "PII never leaves this machine," an interface that shouts undermines it. A quiet, precise surface reads as *safe to put sensitive audio into*. The header states the name and what it does (`Протокол` / `Приватная расшифровка встреч`); the pipeline mechanics live in the empty-state hint, not in the title.
 
 The palette is deliberately near-monochrome — white paper, slate ink, a single controlled blue accent — with colour reserved almost entirely for one job: labelling the entities that get masked. That is the signature move. The saturated chips (PERSON blue, PHONE amber, documents red) are the only chromatic events on screen, and they exist to make privacy *visible*: you can see, at a glance, exactly what is being protected. Density is operational, not airy — this is an Operate-mode tool for 8–10 meetings a day, so three scannable panels beat a spacious hero every time.
 
@@ -125,7 +125,7 @@ A centred shell capped at `max-w-7xl` (80rem / 1280px): a 260px session-history 
 
 The three result panels (transcript, masked text, model reply) stack in a single column, always in the order the pipeline runs; density is operational — content-first, minimal chrome, scannable top-to-bottom. When the recording has more than one speaker, the transcript panel becomes a list of speaker turns (see Speaker labels); a single-speaker recording keeps the plain transcript. The empty state is a centred dashed drop-zone rather than an empty grid.
 
-The header is the product's identity line: the name (`Стенограф`) with a one-line subtitle, and a single `Настройки` action on the right. Settings (model, OpenRouter key status) open as a quiet slate strip under the header, not a modal — they are set once and forgotten. The pipeline mechanics (`STT → PII → …`) are never the title; they belong in the empty-state hint.
+The header is the product's identity line: the name (`Протокол`) with a one-line subtitle, and a single `Настройки` action on the right. Settings (model, OpenRouter key status) open as a quiet slate strip under the header, not a modal — they are set once and forgotten. The pipeline mechanics (`STT → PII → …`) are never the title; they belong in the empty-state hint.
 
 The drop target has two states: a large dashed drop-zone when there is nothing on screen, and — once a result exists — a single compact row (`Перетащите сюда следующую запись или [Обработать ещё]`) so the result keeps the room. Both carry the same drag handlers; the file input lives once in the main column.
 

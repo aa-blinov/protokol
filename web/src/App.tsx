@@ -10,7 +10,7 @@ import {
 import { chipClass, Highlighted, MaskedView } from "./Highlight";
 import { Badge, Button, Card, EmptyState, ProgressBar } from "./ui";
 
-const PRODUCT_NAME = "Стенограф";
+const PRODUCT_NAME = "Протокол";
 
 // Русские числительные требуют трёх форм; Intl.PluralRules закрывает краевые
 // случаи (11–14), которые ломают ручные формулы.

@@ -67,7 +67,7 @@ Python-зависимости ставятся в локальный `api/.venv`
 macOS. Свой интерпретатор можно подставить через `STTSHKA_PYTHON=/путь/к/python`.
 
 Результат:
-- macOS: `desktop/release/STT PII-<version>-arm64.dmg` и распакованный `.app`
+- macOS: `desktop/release/Протокол-<version>-arm64.dmg` и распакованный `.app`
 - Linux: `desktop/release/*<version>*.AppImage`, `*.deb` и `linux-unpacked/`
 
 `onedir`, а не `onefile`: однофайловый бандл распаковывает ~200 МБ нативных
@@ -109,7 +109,7 @@ resources/
 Если что-то работает не так, вернуть на CPU без пересборки:
 
 ```bash
-USE_COREML=0 open "/Applications/STT PII.app"
+USE_COREML=0 open "/Applications/Протокол.app"
 ```
 
 Какой провайдер реально подхватился — видно в `GET /api/health`: `providers`
@@ -130,7 +130,7 @@ Developer ID и сеть Apple). Поэтому при первом запуск
 Локально для себя:
 
 ```bash
-xattr -cr "/Applications/STT PII.app"
+xattr -cr "/Applications/Протокол.app"
 ```
 
 либо щёлкнуть правой кнопкой → «Открыть» → подтвердить.

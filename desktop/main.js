@@ -7,6 +7,7 @@
  */
 const { app, BrowserWindow, dialog } = require("electron");
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
@@ -88,11 +89,30 @@ function sidecarEnv(port) {
   if (!env.STTSHKA_ENV_FILE) {
     // Secrets live outside the bundle — never packaged, never in git. A
     // double-clicked app inherits no shell env, so the sidecar reads them here.
-    env.STTSHKA_ENV_FILE = app.isPackaged
-      ? path.join(app.getPath("userData"), ".env")
-      : path.join(__dirname, "..", ".env");
+    if (app.isPackaged) {
+      const envFile = path.join(app.getPath("userData"), ".env");
+      migrateLegacyEnv(envFile);
+      env.STTSHKA_ENV_FILE = envFile;
+    } else {
+      env.STTSHKA_ENV_FILE = path.join(__dirname, "..", ".env");
+    }
   }
   return env;
+}
+
+/**
+ * The app used to be called "STT PII", so its userData folder still holds the
+ * OpenRouter key. Copy it into the renamed folder once, before the sidecar
+ * reads it, so an existing install does not silently lose its key.
+ */
+function migrateLegacyEnv(target) {
+  try {
+    if (fs.existsSync(target)) return;
+    const legacy = path.join(app.getPath("appData"), "STT PII", ".env");
+    if (fs.existsSync(legacy)) fs.copyFileSync(legacy, target);
+  } catch {
+    /* best effort: no legacy folder simply means a fresh install */
+  }
 }
 
 function stopSidecar() {
@@ -136,7 +156,7 @@ async function createWindow() {
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    title: "STT → PII → OpenRouter",
+    title: "Протокол",
     // The UI is our own local page; keep node out of it.
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });

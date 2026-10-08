@@ -2,7 +2,7 @@
   "name": "sttshka-desktop",
   "private": true,
   "version": "0.1.0",
-  "description": "STT → PII → OpenRouter — нативное приложение для macOS (Apple Silicon)",
+  "description": "Протокол — приватная расшифровка встреч (macOS, Apple Silicon)",
   "homepage": "https://github.com/aa-blinov/sttshka",
   "main": "main.js",
   "author": "sttshka",
@@ -17,8 +17,8 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "monster.blinov.sttshka",
-    "productName": "STT PII",
+    "appId": "monster.blinov.protocol",
+    "productName": "Протокол",
     "executableName": "sttshka",
     "directories": { "output": "release" },
     "files": ["main.js"],
@@ -40,13 +40,13 @@
       "minimumSystemVersion": "13.0"
     },
     "dmg": {
-      "title": "STT PII",
+      "title": "Протокол",
       "backgroundColor": "#ffffff"
     },
     "linux": {
       "target": ["AppImage", "deb"],
       "category": "Office",
-      "synopsis": "STT → PII → OpenRouter",
+      "synopsis": "Протокол — приватная расшифровка встреч",
       "maintainer": "sttshka",
       "executableName": "sttshka"
     }
