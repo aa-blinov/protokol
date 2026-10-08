@@ -60,7 +60,7 @@ class Turn:
     speaker: int
 
 
-def merge_turns(turns: list[Turn], gap: float = 0.5, max_seconds: float = 30.0) -> list[Turn]:
+def merge_turns(turns: list[Turn], gap: float = 0.5, max_seconds: float = 120.0) -> list[Turn]:
     """Join adjacent turns of the same speaker across short gaps, and split any
     turn longer than ``max_seconds`` so the ASR never sees one long block."""
     merged: list[Turn] = []

@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 import config
 import schemas
+from dialogue import build_dialogue
 from diarization import Diarizer
 from llm import DEFAULT_MODEL, LlmError, OpenRouterClient
 from masking import mask, unmask
@@ -216,12 +217,12 @@ async def process(
                                 )
                             )
             if segments:
-                # Character offsets let the UI highlight entities inside each turn.
-                offset = 0
-                for segment in segments:
+                # The model is given the meeting as speaker turns, and it is this
+                # labelled text that gets masked: who said what stays visible, the
+                # PII in it does not.
+                text, offsets = build_dialogue([(item.speaker, item.start, item.text) for item in segments])
+                for segment, offset in zip(segments, offsets):
                     segment.offset = offset
-                    offset += len(segment.text) + 1
-                text = " ".join(segment.text for segment in segments)
             else:
                 text = stt.transcribe_samples(samples)
             timings["transcribe"] = round(time.perf_counter() - started, 2)
@@ -236,7 +237,7 @@ async def process(
 
             started = time.perf_counter()
             yield _line("llm", 70, f"Запрос к {llm_model}")
-            completion = get_llm().complete(result.masked_text, llm_model)
+            completion = get_llm().complete_meeting(result.masked_text, llm_model)
             timings["llm"] = round(time.perf_counter() - started, 2)
 
             payload = schemas.ProcessResult(
