@@ -77,18 +77,24 @@ export function Button({
   disabled,
   variant = "primary",
   type = "button",
+  ariaLabel,
+  ariaExpanded,
 }: {
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   variant?: keyof typeof BUTTON_SURFACE;
   type?: "button" | "submit";
+  ariaLabel?: string;
+  ariaExpanded?: boolean;
 }) {
   return (
     <ButtonSurface
       type={type}
       onClick={onClick}
       disabled={disabled}
+      aria-label={ariaLabel}
+      aria-expanded={ariaExpanded}
       variant={variant === "primary" ? "default" : "outline"}
       className={`min-h-11 px-4 ${BUTTON_SURFACE[variant]}`}
     >

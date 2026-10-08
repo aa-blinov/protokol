@@ -1,6 +1,6 @@
 ---
-name: STT PII
-description: Private audio → masked-text → LLM pipeline UI for a banking executive
+name: Стенограф
+description: Приватная расшифровка встреч — аудио → маскированный текст → LLM, всё локально
 colors:
   primary: "#1d4ed8"
   primary-foreground: "#ffffff"
@@ -55,13 +55,13 @@ components:
     padding: "2px 8px"
 ---
 
-# Design System: STT PII
+# Design System: Стенограф
 
 ## Overview
 
 **Creative North Star: "The Quiet Vault"**
 
-This is a trust instrument before it is a tool. The person using it is a banking executive handling other people's personal data; the interface must feel like a sealed, orderly vault — calm, exact, and quietly authoritative. Nothing decorative competes with the content. The visual restraint is the point: when the product's whole promise is "PII never leaves this machine," an interface that shouts undermines it. A quiet, precise surface reads as *safe to put sensitive audio into*.
+The product is called **Стенограф** — a private meeting transcriber. This is a trust instrument before it is a tool. The person using it is a banking executive handling other people's personal data; the interface must feel like a sealed, orderly vault — calm, exact, and quietly authoritative. Nothing decorative competes with the content. The visual restraint is the point: when the product's whole promise is "PII never leaves this machine," an interface that shouts undermines it. A quiet, precise surface reads as *safe to put sensitive audio into*. The header states the name and what it does (`Стенограф` / `Приватная расшифровка встреч`); the pipeline mechanics live in the empty-state hint, not in the title.
 
 The palette is deliberately near-monochrome — white paper, slate ink, a single controlled blue accent — with colour reserved almost entirely for one job: labelling the entities that get masked. That is the signature move. The saturated chips (PERSON blue, PHONE amber, documents red) are the only chromatic events on screen, and they exist to make privacy *visible*: you can see, at a glance, exactly what is being protected. Density is operational, not airy — this is an Operate-mode tool for 8–10 meetings a day, so three scannable panels beat a spacious hero every time.
 
@@ -125,6 +125,10 @@ A centred shell capped at `max-w-7xl` (80rem / 1280px): a 260px session-history 
 
 The three result panels (transcript, masked text, model reply) stack in a single column, always in the order the pipeline runs; density is operational — content-first, minimal chrome, scannable top-to-bottom. When the recording has more than one speaker, the transcript panel becomes a list of speaker turns (see Speaker labels); a single-speaker recording keeps the plain transcript. The empty state is a centred dashed drop-zone rather than an empty grid.
 
+The header is the product's identity line: the name (`Стенограф`) with a one-line subtitle, and a single `Настройки` action on the right. Settings (model, OpenRouter key status) open as a quiet slate strip under the header, not a modal — they are set once and forgotten. The pipeline mechanics (`STT → PII → …`) are never the title; they belong in the empty-state hint.
+
+The drop target has two states: a large dashed drop-zone when there is nothing on screen, and — once a result exists — a single compact row (`Перетащите сюда следующую запись или [Обработать ещё]`) so the result keeps the room. Both carry the same drag handlers; the file input lives once in the main column.
+
 **The Order-Matches-Pipeline Rule.** Panels read left-to-right (or top-to-bottom when stacked) in the same order the data flows: transcript → masked → reply. Never rearrange them.
 
 ## Elevation & Depth
@@ -175,6 +179,15 @@ A gently curved, utilitarian form language. Radius derives from a `0.625rem` (10
 
 ### Empty State
 - **Style:** A centred `rounded-lg` panel with a `border-dashed slate-300` edge and a faint `bg-white/60` fill — a calm drop target. Title in `text-sm font-medium slate-800`, hint beneath in `slate-500`.
+
+### Settings strip
+- **Style:** A `bg-slate-50` band under the header, separated by a `border-t` hairline. Inline labelled fields (`Модель LLM` text input, `Ключ OpenRouter` status in `emerald-700` / `amber-700`) and one explanatory line. In-flow, not a modal or a floating popover: it is opened by the header's `Настройки` button and forgotten once set.
+
+### Session row
+- **Style:** A full-width `rounded-md` selectable row (`border-slate-200`, hover `bg-slate-50`, active `border-blue-300 bg-blue-50`) with the file name on top and `date · N PII` beneath in `slate-500`. A monochrome `×` delete sits top-right as a sibling button (never nested inside the select button), appearing on hover; it removes the session and, if it was on screen, clears the result.
+
+### Result actions
+- **Style:** Small outline buttons in `slate-500` — `Скопировать` in a card header, `Скачать отчёт` at the right of the badges row. Text-only, no accent: copying and exporting are secondary to the content and must not compete with the one primary action. The report is a plain-text file (transcript + masked text + reply).
 
 ## Do's and Don'ts
 

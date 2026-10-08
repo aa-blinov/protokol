@@ -64,6 +64,19 @@ async function toError(response: Response): Promise<never> {
   throw new Error(detail);
 }
 
+export interface Health {
+  stt: boolean;
+  ner: boolean;
+  diarization: boolean;
+  llm_configured: boolean;
+}
+
+export async function getHealth(): Promise<Health> {
+  const response = await fetch("/api/health");
+  if (!response.ok) await toError(response);
+  return response.json();
+}
+
 export async function maskText(text: string): Promise<MaskResponse> {
   const response = await fetch("/api/mask", {
     method: "POST",

@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { processAudio, type Entity, type ProcessResult, type ProgressEvent, type Session } from "./api";
+import {
+  getHealth,
+  processAudio,
+  type Entity,
+  type ProcessResult,
+  type ProgressEvent,
+  type Session,
+} from "./api";
 import { chipClass, Highlighted, MaskedView } from "./Highlight";
 import { Badge, Button, Card, EmptyState, ProgressBar } from "./ui";
+
+const PRODUCT_NAME = "Стенограф";
 
 // Русские числительные требуют трёх форм; Intl.PluralRules закрывает краевые
 // случаи (11–14), которые ломают ручные формулы.
@@ -33,6 +42,64 @@ function formatTime(seconds: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
+/** The transcript as copyable text: speaker turns when diarized, else plain. */
+function transcriptText(result: ProcessResult): string {
+  if (result.segments.length === 0) return result.transcript;
+  return result.segments.map((segment) => `${speakerLabel(segment.speaker)}: ${segment.text}`).join("\n");
+}
+
+function buildReport(session: Session): string {
+  const result = session.result;
+  return [
+    `${PRODUCT_NAME} — расшифровка встречи`,
+    `Файл: ${session.name}`,
+    `Дата: ${new Date(session.createdAt).toLocaleString("ru-RU")}`,
+    `Длительность: ${result.duration_sec.toFixed(1)} с`,
+    `Модель: ${result.llm_model}`,
+    "",
+    "ТРАНСКРИПЦИЯ",
+    transcriptText(result),
+    "",
+    "МАСКИРОВАННЫЙ ТЕКСТ (ушёл в LLM)",
+    result.masked_text,
+    "",
+    "ОТВЕТ МОДЕЛИ",
+    result.reply_unmasked,
+    "",
+  ].join("\n");
+}
+
+function downloadText(filename: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function CopyButton({ text, label = "Скопировать" }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked — the download button still works */
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => void copy()}
+      className="focus-ring rounded-md border border-slate-200 px-2 py-0.5 text-xs text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+    >
+      {copied ? "Скопировано" : label}
+    </button>
+  );
+}
+
 const STORAGE_KEY = "sttshka.sessions";
 const DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash";
 
@@ -51,11 +118,19 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [model, setModel] = useState(DEFAULT_MODEL);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [llmConfigured, setLlmConfigured] = useState<boolean | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions.slice(0, 50)));
   }, [sessions]);
+
+  useEffect(() => {
+    getHealth()
+      .then((health) => setLlmConfigured(health.llm_configured))
+      .catch(() => setLlmConfigured(null));
+  }, []);
 
   const run = useCallback(
     async (file: File) => {
@@ -90,30 +165,69 @@ export default function App() {
     if (file) void run(file);
   };
 
+  const dropHandlers = {
+    onDragOver: (event: React.DragEvent) => {
+      event.preventDefault();
+      setDragging(true);
+    },
+    onDragLeave: () => setDragging(false),
+    onDrop,
+  };
+
+  const removeSession = (id: string) => {
+    setSessions((previous) => previous.filter((session) => session.id !== id));
+    setCurrent((active) => (active?.id === id ? null : active));
+  };
+
   const result = current?.result;
   const busy = progress !== null;
+  const showDropTarget = !result && !busy;
 
   return (
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
-          <h1 className="text-base font-semibold tracking-tight text-slate-900">STT → PII → OpenRouter</h1>
-          <Badge tone="green">Личный инструмент</Badge>
-          <div className="ml-auto flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-xs text-slate-600">
-              Модель LLM
-              <input
-                value={model}
-                onChange={(event) => setModel(event.target.value)}
-                className="focus-ring w-56 rounded-md border border-slate-300 bg-white px-2 py-1.5 font-mono text-xs"
-                aria-label="Модель LLM"
-              />
-            </label>
-            <Button variant="ghost" onClick={() => inputRef.current?.click()} disabled={busy}>
-              Выбрать файл
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-semibold tracking-tight text-slate-900">{PRODUCT_NAME}</h1>
+            <p className="truncate text-xs text-slate-500">Приватная расшифровка встреч</p>
+          </div>
+          <div className="ml-auto">
+            <Button
+              variant="ghost"
+              onClick={() => setSettingsOpen((open) => !open)}
+              ariaLabel="Настройки"
+              ariaExpanded={settingsOpen}
+            >
+              Настройки
             </Button>
           </div>
         </div>
+
+        {settingsOpen ? (
+          <div className="border-t border-slate-100 bg-slate-50">
+            <div className="mx-auto flex max-w-7xl flex-wrap items-end gap-x-8 gap-y-3 px-5 py-3">
+              <label className="flex flex-col gap-1 text-xs text-slate-600">
+                Модель LLM
+                <input
+                  value={model}
+                  onChange={(event) => setModel(event.target.value)}
+                  className="focus-ring w-64 rounded-md border border-slate-300 bg-white px-2 py-1.5 font-mono text-xs"
+                  aria-label="Модель LLM"
+                />
+              </label>
+              <div className="flex flex-col gap-1 text-xs text-slate-600">
+                Ключ OpenRouter
+                <span className={llmConfigured ? "text-emerald-700" : "text-amber-700"}>
+                  {llmConfigured === null ? "проверяем…" : llmConfigured ? "настроен" : "не задан"}
+                </span>
+              </div>
+              <p className="max-w-md text-xs text-slate-500">
+                Ключ хранится в <span className="font-mono">.env</span> рядом с приложением и не попадает в сборку.
+                Смена модели действует на новые записи.
+              </p>
+            </div>
+          </div>
+        ) : null}
       </header>
 
       <div className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 gap-6 px-5 py-6 lg:grid-cols-[260px_1fr]">
@@ -124,10 +238,10 @@ export default function App() {
           ) : (
             <ul className="space-y-1.5">
               {sessions.map((session) => (
-                <li key={session.id}>
+                <li key={session.id} className="relative">
                   <button
                     onClick={() => setCurrent(session)}
-                    className={`focus-ring w-full rounded-md border px-3 py-2 text-left transition-colors ${
+                    className={`focus-ring w-full rounded-md border py-2 pl-3 pr-9 text-left transition-colors ${
                       current?.id === session.id
                         ? "border-blue-300 bg-blue-50"
                         : "border-slate-200 bg-white hover:bg-slate-50"
@@ -139,6 +253,14 @@ export default function App() {
                       <span>· {session.result.entities.length} PII</span>
                     </div>
                   </button>
+                  <button
+                    onClick={() => removeSession(session.id)}
+                    aria-label={`Удалить сессию ${session.name}`}
+                    title="Удалить"
+                    className="focus-ring absolute right-1.5 top-1.5 rounded-md px-1.5 py-0.5 text-base leading-none text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    ×
+                  </button>
                 </li>
               ))}
             </ul>
@@ -146,41 +268,62 @@ export default function App() {
         </aside>
 
         <main className="space-y-5">
-          <div
-            onDragOver={(event) => {
-              event.preventDefault();
-              setDragging(true);
+          <input
+            ref={inputRef}
+            type="file"
+            accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac,.mp4"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void run(file);
+              event.target.value = "";
             }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-            className={`rounded-lg border-2 border-dashed px-6 py-8 text-center transition-colors ${
-              dragging ? "border-blue-500 bg-blue-50" : "border-slate-300 bg-white"
-            }`}
-          >
-            <input
-              ref={inputRef}
-              type="file"
-              accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac,.mp4"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void run(file);
-                event.target.value = "";
-              }}
-            />
-            <p className="text-sm font-medium text-slate-800">Перетащите запись звонка сюда</p>
-            <p className="mt-1 text-sm text-slate-500">
-              WAV, MP3, M4A, OGG. Запись до часа, аудио обрабатывается локально.
-            </p>
-            <div className="mt-4">
-              <Button onClick={() => inputRef.current?.click()} disabled={busy}>
-                Выбрать аудиофайл
+          />
+
+          {showDropTarget ? (
+            <div
+              {...dropHandlers}
+              className={`rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors ${
+                dragging ? "border-blue-500 bg-blue-50" : "border-slate-300 bg-white"
+              }`}
+            >
+              <p className="text-sm font-medium text-slate-800">Перетащите запись встречи сюда</p>
+              <p className="mt-1 text-sm text-slate-500">
+                WAV, MP3, M4A, OGG. Запись до часа, аудио обрабатывается локально.
+              </p>
+              <div className="mt-4">
+                <Button onClick={() => inputRef.current?.click()} disabled={busy}>
+                  Выбрать аудиофайл
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div
+              {...dropHandlers}
+              className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-2.5 transition-colors ${
+                dragging ? "border-blue-400 bg-blue-50" : "border-slate-200 bg-white"
+              }`}
+            >
+              <span className="text-sm text-slate-600">Перетащите сюда следующую запись или</span>
+              <Button variant="ghost" onClick={() => inputRef.current?.click()} disabled={busy}>
+                Обработать ещё
               </Button>
             </div>
-          </div>
+          )}
+
+          {llmConfigured === false ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <p className="text-sm font-medium text-amber-900">Ключ OpenRouter не задан</p>
+              <p className="mt-1 text-sm text-amber-800">
+                Запись расшифруется и обезличится, но ответа модели не будет. Добавьте{" "}
+                <span className="font-mono">OPENROUTER_API_KEY</span> в файл <span className="font-mono">.env</span>{" "}
+                рядом с приложением и перезапустите его.
+              </p>
+            </div>
+          ) : null}
 
           {busy && progress ? (
-            <Card title="Обработка">
+            <Card title="Обработка" accent="#1d4ed8">
               <ProgressBar pct={progress.pct} message={progress.message} />
             </Card>
           ) : null}
@@ -194,41 +337,46 @@ export default function App() {
 
           {!result && !busy && !error ? (
             <EmptyState
-              title="Результаты появятся здесь"
-              hint="Здесь будет видно, что именно уходит в LLM: транскрипция, маскированный текст и ответ модели."
+              title="Здесь появится расшифровка"
+              hint="После обработки будут три панели: что сказано, что именно уходит в модель и её ответ."
             />
           ) : null}
 
-          {result ? (
+          {result && current ? (
             <>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone="blue">Длительность {result.duration_sec.toFixed(1)} сек</Badge>
-                <Badge tone={result.entities.length ? "amber" : "green"}>
-                  PII: {result.entities.length}
-                </Badge>
+                <Badge tone={result.entities.length ? "amber" : "green"}>ПДн: {result.entities.length}</Badge>
                 <Badge tone="slate">Модель: {result.llm_model}</Badge>
-                {Object.entries(result.timings).map(([stage, seconds]) => (
-                  <Badge key={stage} tone="slate">
-                    {stage}: {seconds.toFixed(1)}с
-                  </Badge>
-                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadText(`${current.name.replace(/\.[^.]+$/, "")} — расшифровка.txt`, buildReport(current))
+                  }
+                  className="focus-ring ml-auto rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  Скачать отчёт
+                </button>
               </div>
 
               <Card
-                title="1 · Транскрипция"
+                title="1 · Что сказано"
                 accent="#64748b"
                 meta={
-                  result.segments.length > 0 ? (
-                    <span>
-                      {new Set(result.segments.map((segment) => segment.speaker)).size}{" "}
-                      {pluralRu(
-                        new Set(result.segments.map((segment) => segment.speaker)).size,
-                        "спикер",
-                        "спикера",
-                        "спикеров",
-                      )}
-                    </span>
-                  ) : undefined
+                  <span className="flex items-center gap-2">
+                    {result.segments.length > 0 ? (
+                      <span>
+                        {new Set(result.segments.map((segment) => segment.speaker)).size}{" "}
+                        {pluralRu(
+                          new Set(result.segments.map((segment) => segment.speaker)).size,
+                          "спикер",
+                          "спикера",
+                          "спикеров",
+                        )}
+                      </span>
+                    ) : null}
+                    <CopyButton text={transcriptText(result)} />
+                  </span>
                 }
               >
                 {result.segments.length > 0 ? (
@@ -260,7 +408,7 @@ export default function App() {
               </Card>
 
               <Card
-                title="2 · Маскированный текст (уходит в LLM)"
+                title="2 · Что уходит в модель"
                 accent="#1d4ed8"
                 meta={
                   <span className="font-mono">
@@ -287,7 +435,11 @@ export default function App() {
                 ) : null}
               </Card>
 
-              <Card title="3 · Ответ модели" accent="#0f766e">
+              <Card
+                title="3 · Ответ модели"
+                accent="#0f766e"
+                meta={<CopyButton text={result.reply_unmasked} />}
+              >
                 <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">{result.reply_unmasked}</p>
                 <details className="mt-3">
                   <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">
