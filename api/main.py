@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 import config
 import schemas
-from dialogue import build_dialogue
+from dialogue import assign_words_to_turns, build_dialogue
 from diarization import Diarizer
 from llm import DEFAULT_MODEL, LlmError, OpenRouterClient
 from masking import mask, unmask
@@ -201,18 +201,21 @@ async def process(
                 yield _line("diarize", 20, "Определение говорящих")
                 turns = diarizer.diarize(samples)
                 if len({turn.speaker for turn in turns}) > 1:
-                    # Several speakers: transcribe each turn on its own so the text
-                    # can be labelled. Single-speaker audio skips this and is
-                    # transcribed whole, as before.
-                    for turn in turns:
-                        piece = samples[int(turn.start * TARGET_SAMPLE_RATE) : int(turn.end * TARGET_SAMPLE_RATE)]
-                        turn_text = stt.transcribe_samples(piece).strip()
+                    # One pass over the whole audio (the model keeps its own
+                    # context), then each word is assigned to the speaker turn it
+                    # falls in — instead of transcribing every turn in isolation.
+                    words = stt.transcribe_words(samples)
+                    attributed = assign_words_to_turns(
+                        words, [(turn.speaker, turn.start, turn.end) for turn in turns]
+                    )
+                    for speaker, start, end, turn_text in attributed:
+                        turn_text = turn_text.strip()
                         if turn_text:
                             segments.append(
                                 schemas.SpeakerSegment(
-                                    speaker=turn.speaker,
-                                    start=round(turn.start, 2),
-                                    end=round(turn.end, 2),
+                                    speaker=speaker,
+                                    start=round(start, 2),
+                                    end=round(end, 2),
                                     text=turn_text,
                                 )
                             )

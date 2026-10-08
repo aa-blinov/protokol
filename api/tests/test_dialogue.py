@@ -12,7 +12,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from dialogue import build_dialogue, format_clock  # noqa: E402
+from dialogue import (  # noqa: E402
+    Word,
+    assign_words_to_turns,
+    build_dialogue,
+    format_clock,
+    words_from_timed_text,
+)
+from stt import Stt  # noqa: E402
 from llm import (  # noqa: E402
     DEFAULT_MODEL,
     LlmResult,
@@ -85,4 +92,32 @@ def test_long_meeting_is_summarised_in_parts_then_composed():
     assert len(calls) == len(split_masked_text(long_text)) + 1
     assert calls[-1][0] == SYSTEM_PROMPT
     assert all(call[0] != SYSTEM_PROMPT for call in calls[:-1])
+
+
+def test_words_from_timed_text_splits_on_whitespace_and_carries_times():
+    text = "Привет мир"
+    times = [float(i) for i in range(len(text))]
+    words = words_from_timed_text(text, times)
+    assert [(word.text, word.start, word.end) for word in words] == [("Привет", 0.0, 6.0), ("мир", 7.0, 9.0)]
+
+
+def test_assign_words_to_turns_by_start_and_merge():
+    words = [Word("раз", 0.0, 0.5), Word("два", 1.0, 1.5), Word("три", 2.0, 2.5)]
+    turns = [(0, 0.0, 1.8), (1, 1.8, 3.0)]
+    assert assign_words_to_turns(words, turns) == [
+        (0, 0.0, 1.8, "раз два"),
+        (1, 1.8, 3.0, "три"),
+    ]
+
+
+def test_char_times_aligns_the_cleaned_text_to_the_token_stream():
+    tokens = [" ", "П", "ри", "вет", " ", " И", "ван"]
+    times = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
+    char_times = Stt._char_times(tokens, times, "Привет Иван")
+    assert char_times[0] == 0.1  # 'П'
+    assert char_times[7] == 0.5  # 'И', after the collapsed double space
+
+
+def test_char_times_without_timestamps_is_all_zero():
+    assert Stt._char_times(["a"], None, "a") == [0.0]
 

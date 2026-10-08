@@ -38,6 +38,7 @@ import onnx_asr
 from av.error import FFmpegError
 
 import config
+from dialogue import Word, words_from_timed_text
 
 MODEL_NAME = "gigaam-v3-e2e-ctc"
 # int8 weights: on our tests the same accuracy as fp32 (0% WER clean, +0.8 pp at
@@ -71,6 +72,9 @@ class Stt:
             providers=config.ort_providers(),
             quantization=QUANTIZATION,
         )
+        # Same weights, but returning time per token — used to attribute words to
+        # speaker turns instead of transcribing each turn blind.
+        self._timestamps = self.model.with_timestamps()
 
     def transcribe(self, audio: bytes, suffix: str = ".wav") -> tuple[str, float]:
         """Return ``(text, duration_seconds)`` for raw audio bytes."""
@@ -95,6 +99,52 @@ class Stt:
                 self._write_wav(chunk, wav_path)
                 texts.append(self.model.recognize(str(wav_path)).strip())
         return " ".join(text for text in texts if text)
+
+    def transcribe_words(self, samples: np.ndarray) -> list[Word]:
+        """Recognize the whole audio once and return words with their times.
+
+        One pass keeps the model's own context across speaker turns; the caller
+        then assigns each word to the speaker turn it falls in. Long audio is
+        still split at quiet frames, and each chunk's times are shifted to the
+        whole recording.
+        """
+        words: list[Word] = []
+        offset = 0.0
+        with tempfile.TemporaryDirectory() as tmp:
+            for index, chunk in enumerate(self._split_long(samples)):
+                wav_path = Path(tmp) / f"words{index}.wav"
+                self._write_wav(chunk, wav_path)
+                result = self._timestamps.recognize(str(wav_path))
+                times = self._char_times(result.tokens, result.timestamps, result.text)
+                words.extend(
+                    Word(word.text, word.start + offset, word.end + offset)
+                    for word in words_from_timed_text(result.text, times)
+                )
+                offset += len(chunk) / TARGET_SAMPLE_RATE
+        return words
+
+    @staticmethod
+    def _char_times(tokens: list[str], timestamps: list[float] | None, text: str) -> list[float]:
+        """The time of every character in ``text``.
+
+        ``onnx_asr`` builds its text from the tokens with a whitespace cleanup,
+        so text and tokens are not index-aligned. The cleanup only drops or
+        collapses whitespace, which keeps the other characters in order — so
+        walking the text and taking the next matching character in the raw token
+        stream recovers each character's time without re-implementing it.
+        """
+        if not timestamps:
+            return [0.0] * len(text)
+        raw = "".join(tokens)
+        raw_time = [time for token, time in zip(tokens, timestamps) for _ in token]
+        times: list[float] = []
+        index = 0
+        for char in text:
+            while index < len(raw) and raw[index] != char:
+                index += 1
+            times.append(raw_time[index] if index < len(raw) else (times[-1] if times else 0.0))
+            index += 1
+        return times
 
     @classmethod
     def _split_long(cls, samples: np.ndarray, max_seconds: float = SEGMENT_MAX_SECONDS) -> list[np.ndarray]:
