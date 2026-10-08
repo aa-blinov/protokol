@@ -19,6 +19,7 @@
   "build": {
     "appId": "monster.blinov.protocol",
     "productName": "Протокол",
+    "icon": "icon.png",
     "executableName": "sttshka",
     "directories": { "output": "release" },
     "files": ["main.js"],
