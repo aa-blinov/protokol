@@ -8,10 +8,11 @@ import {
   type Session,
 } from "./api";
 import { chipClass, Highlighted, MaskedView } from "./Highlight";
-import { Button, CopyButton, ProgressBar, Section } from "./ui";
+import { Button, CopyButton, Markdown, ProgressBar, Section } from "./ui";
 
 const PRODUCT_NAME = "Протокол";
 const STORAGE_KEY = "sttshka.sessions";
+const THEME_KEY = "sttshka.theme";
 const DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash";
 
 // Русские числительные требуют трёх форм; Intl.PluralRules закрывает краевые
@@ -83,6 +84,17 @@ function loadSessions(): Session[] {
   }
 }
 
+/** The product mark — same shape as the app icon and favicon. */
+function Mark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" className={className} role="img" aria-label={PRODUCT_NAME}>
+      <rect width="32" height="32" rx="7" fill="#1d4ed8" />
+      <rect x="7" y="11" width="18" height="3.5" rx="1.75" fill="#ffffff" />
+      <rect x="7" y="17.5" width="11" height="3.5" rx="1.75" fill="#ffffff" opacity="0.72" />
+    </svg>
+  );
+}
+
 /** The raised document: file header, then the pipeline sections. */
 function Document({
   session,
@@ -105,12 +117,15 @@ function Document({
           {speakers > 1 ? ` · ${speakers} ${pluralRu(speakers, "спикер", "спикера", "спикеров")}` : ""} ·{" "}
           {result.llm_model}
         </p>
-        <div className="mt-4 flex flex-wrap items-center gap-4">
+        <div className="no-print mt-4 flex flex-wrap items-center gap-4">
           <Button
             variant="ghost"
             onClick={() => downloadText(`${session.name.replace(/\.[^.]+$/, "")} — расшифровка.txt`, buildReport(session))}
           >
-            Скачать отчёт
+            Скачать .txt
+          </Button>
+          <Button variant="ghost" onClick={() => window.print()}>
+            Печать / PDF
           </Button>
           <Button variant="text" onClick={onAnother}>
             Обработать ещё
@@ -157,7 +172,7 @@ function Document({
           <MaskedView text={result.masked_text} entityMap={result.entity_map} />
         </div>
         {tokens > 0 ? (
-          <details className="mt-4">
+          <details className="no-print mt-4">
             <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">
               Таблица подстановок
             </summary>
@@ -174,10 +189,8 @@ function Document({
       </Section>
 
       <Section label="Ответ модели" meta={<CopyButton text={result.reply_unmasked} />}>
-        <p className="max-w-[68ch] whitespace-pre-wrap text-[15px] leading-7 text-slate-800">
-          {result.reply_unmasked}
-        </p>
-        <details className="mt-4">
+        <Markdown text={result.reply_unmasked} />
+        <details className="no-print mt-4">
           <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">
             Ответ до обратной подстановки
           </summary>
@@ -199,7 +212,18 @@ export default function App() {
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [llmConfigured, setLlmConfigured] = useState<boolean | null>(null);
+  const [query, setQuery] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light",
+  );
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions.slice(0, 50)));
@@ -258,18 +282,36 @@ export default function App() {
     setCurrent((active) => (active?.id === id ? null : active));
   };
 
+  const renameSession = (id: string, name: string) => {
+    const trimmed = name.trim();
+    setSessions((previous) => previous.map((session) => (session.id === id ? { ...session, name: trimmed || session.name } : session)));
+    setEditingId(null);
+  };
+
+  const visibleSessions = query
+    ? sessions.filter((session) => session.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : sessions;
+
   const result = current?.result;
   const busy = progress !== null;
 
   return (
     <div className="min-h-full">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center gap-4 px-6 py-4">
+      <header className="no-print sticky top-0 z-10 border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 py-4">
+          <Mark className="h-7 w-7 shrink-0" />
           <div className="min-w-0">
             <h1 className="text-lg font-semibold tracking-tight text-slate-900">{PRODUCT_NAME}</h1>
             <p className="text-xs text-slate-500">Приватная расшифровка встреч</p>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}
+              ariaLabel={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+            >
+              {theme === "dark" ? "Светлая" : "Тёмная"}
+            </Button>
             <Button
               variant="ghost"
               onClick={() => setSettingsOpen((open) => !open)}
@@ -307,34 +349,73 @@ export default function App() {
         ) : null}
       </header>
 
-      <div className="mx-auto grid max-w-5xl grid-cols-1 gap-x-10 gap-y-8 px-6 py-8 lg:grid-cols-[200px_1fr]">
-        <aside>
+      <div className="mx-auto grid max-w-5xl grid-cols-1 gap-x-10 gap-y-8 px-6 py-8 lg:grid-cols-[200px_1fr] print:grid-cols-1">
+        <aside className="no-print">
           <h2 className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">История</h2>
+          {sessions.length > 0 ? (
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Поиск"
+              aria-label="Поиск по истории"
+              className="focus-ring mt-3 w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm placeholder:text-slate-400"
+            />
+          ) : null}
           {sessions.length === 0 ? (
             <p className="mt-3 text-sm text-slate-400">Пока пусто</p>
+          ) : visibleSessions.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-400">Ничего не найдено</p>
           ) : (
             <ul className="mt-2 space-y-0.5">
-              {sessions.map((session) => (
+              {visibleSessions.map((session) => (
                 <li key={session.id} className="group flex items-start">
-                  <button
-                    onClick={() => setCurrent(session)}
-                    className={`focus-ring min-w-0 flex-1 rounded px-2 py-1 text-left transition-colors ${
-                      current?.id === session.id ? "bg-slate-100 text-blue-700" : "text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    <span className="block truncate text-sm">{session.name}</span>
-                    <span className="font-mono text-[11px] tabular-nums text-slate-400">
-                      {new Date(session.createdAt).toLocaleDateString("ru-RU")} · {session.result.entities.length} ПДн
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => removeSession(session.id)}
-                    aria-label={`Удалить сессию ${session.name}`}
-                    title="Удалить"
-                    className="focus-ring mt-1 rounded px-1 text-sm leading-none text-slate-300 opacity-0 transition-opacity hover:text-slate-600 group-hover:opacity-100"
-                  >
-                    ×
-                  </button>
+                  {editingId === session.id ? (
+                    <input
+                      autoFocus
+                      value={draft}
+                      onChange={(event) => setDraft(event.target.value)}
+                      onBlur={() => renameSession(session.id, draft)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") event.currentTarget.blur();
+                        if (event.key === "Escape") setEditingId(null);
+                      }}
+                      aria-label="Новое имя сессии"
+                      className="focus-ring min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm"
+                    />
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setCurrent(session)}
+                        className={`focus-ring min-w-0 flex-1 rounded px-2 py-1 text-left transition-colors ${
+                          current?.id === session.id ? "bg-slate-100 text-blue-700" : "text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        <span className="block truncate text-sm">{session.name}</span>
+                        <span className="font-mono text-[11px] tabular-nums text-slate-400">
+                          {new Date(session.createdAt).toLocaleDateString("ru-RU")} · {session.result.entities.length} ПДн
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingId(session.id);
+                          setDraft(session.name);
+                        }}
+                        aria-label={`Переименовать сессию ${session.name}`}
+                        title="Переименовать"
+                        className="focus-ring mt-1 rounded px-1 text-xs leading-none text-slate-300 opacity-0 transition-opacity hover:text-slate-600 group-hover:opacity-100"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        onClick={() => removeSession(session.id)}
+                        aria-label={`Удалить сессию ${session.name}`}
+                        title="Удалить"
+                        className="focus-ring mt-1 rounded px-1 text-sm leading-none text-slate-300 opacity-0 transition-opacity hover:text-slate-600 group-hover:opacity-100"
+                      >
+                        ×
+                      </button>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>
@@ -375,14 +456,26 @@ export default function App() {
           ) : null}
 
           {!result && !busy && !error ? (
-            <div className="flex min-h-[320px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 px-6 text-center">
-              <p className="text-base font-medium text-slate-800">Перетащите запись встречи</p>
-              <p className="mt-1 text-sm text-slate-500">WAV, MP3, M4A, OGG — до часа. Обработка на этом компьютере.</p>
-              <div className="mt-5">
+            <div className="flex min-h-[380px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 px-6 py-12 text-center">
+              <Mark className="h-10 w-10" />
+              <h2 className="mt-4 max-w-sm text-lg font-semibold tracking-tight text-slate-900">
+                Расшифровка встреч, которая не покидает ваш компьютер
+              </h2>
+              <p className="mx-auto mt-2 max-w-lg text-sm text-slate-500">
+                Запись превращается в транскрипт и протокол. Персональные данные маскируются здесь, в модель уходит
+                только обезличенный текст.
+              </p>
+              <ol className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 font-mono text-[11px] uppercase tracking-[0.12em] text-slate-400">
+                <li>01 · Аудио</li>
+                <li>02 · Маскирование</li>
+                <li>03 · Протокол</li>
+              </ol>
+              <div className="mt-6">
                 <Button onClick={() => inputRef.current?.click()} disabled={busy}>
                   Выбрать аудиофайл
                 </Button>
               </div>
+              <p className="mt-3 text-xs text-slate-400">WAV, MP3, M4A, OGG — до часа. Или перетащите файл сюда.</p>
             </div>
           ) : null}
 

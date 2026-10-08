@@ -10,6 +10,11 @@ colors:
   muted-foreground: "#64748b"
   border: "#e2e8f0"
   destructive: "#b91c1c"
+  dark:
+    background: "#0b1120"
+    surface: "#0f172a"
+    foreground: "#e5e7eb"
+    border: "#1e293b"
 typography:
   body:
     fontFamily: '"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif'
@@ -60,10 +65,14 @@ The single most important decision is that the result is **a document, not a das
 - **Near-monochrome chrome, one accent.** `#1d4ed8` marks the single primary action, the progress fill, and the focus ring — nothing else.
 - **Colour means PII.** The only saturated colour on screen is the entity chips; everything else is slate on white/paper.
 - **Mono for the machine.** Tokens, counts, durations, model ids, timestamps — and the section labels themselves — are monospace. Prose is the system sans.
+- **Marked and themable.** A brand mark (the app icon's bars-in-a-square) anchors the header, and the whole surface flips to a dark palette from one control.
 
 ## Colors
 
 Near-monochrome slate-and-paper chrome, one disciplined accent, a saturated chip palette used only for masked entities.
+
+### Dark theme
+The same system on ink: page `#0b1120`, surface `#0f172a`, text `#e5e7eb`, hairline `#1e293b`; Vault Blue stays the accent and the chip palette darkens to keep its hue mapping legible. Applied by toggling a `.dark` class on `<html>`, before first paint, from a saved preference.
 
 ### Primary
 - **Vault Blue** (`#1d4ed8`): the one accent — the primary button, the progress indicator fill, the focus ring. Its rarity is deliberate.
@@ -124,8 +133,17 @@ Small and utilitarian: `6px` on controls, `4px` on chips, `8px` on the drop targ
 
 ## Components
 
+### Brand mark
+The app-bar identity: the icon's shape — two white bars in a rounded Vault Blue square — at `28px` beside the wordmark «Протокол» and the one-line descriptor. The same mark is the favicon and the desktop icon, so the product has one face.
+
 ### Document header
-File name as the title (`1.5rem` semibold, wraps), one mono meta line beneath, then quiet actions: `Скачать отчёт` (outlined) and `Обработать ещё` (text). No badge row, no accent dot.
+File name as the title (`1.5rem` semibold, wraps), one mono meta line beneath, then quiet actions: `Скачать .txt` and `Печать / PDF` (outlined) and `Обработать ещё` (text). No badge row, no accent dot.
+
+### Onboarding (empty state)
+The first run teaches the product, not just the drop zone: the brand mark, a value headline («Расшифровка встреч, которая не покидает ваш компьютер»), a one-line privacy promise, the three pipeline steps as mono labels (`01 · АУДИО  02 · МАСКИРОВАНИЕ  03 · ПРОТОКОЛ`), the primary CTA, and the accepted formats. One dashed target, now with a reason to trust it.
+
+### Model reply
+The protocol arrives from the model as light Markdown. It is rendered, not dumped: `**bold**` lines become section subheadings, `- ` runs become bullet lists, inline `**`/`*` become strong/em, and `---` becomes a hairline. The raw `**` and `-` markers never reach the page.
 
 ### Section
 A hairline above, a mono uppercase label, an optional right-aligned meta (token count, "Скопировать"), then the content. This replaces the card.
@@ -138,7 +156,7 @@ When a recording has several speakers, the transcript becomes a list: a `92px` m
 
 ### Buttons
 - **Primary:** solid Vault Blue, white text, `min-h-9`, `6px 12px` — the single CTA ("Выбрать аудиофайл").
-- **Ghost:** white, slate-800 text, 1px slate-300 border — secondary ("Скачать отчёт", "Настройки").
+- **Ghost:** white, slate-800 text, 1px slate-300 border — secondary ("Скачать .txt", "Печать / PDF", "Настройки", theme toggle).
 - **Text:** no border, slate-500 → slate-900 on hover — inline affordances ("Обработать ещё", "Скопировать").
 
 ### Inputs
@@ -148,13 +166,16 @@ Monochrome fields on white, 1px `--border`, `6px` radius, focus ring in Vault Bl
 A thin `h-1.5` `bg-slate-200` track filled with the accent; a message on the left, a mono percentage on the right.
 
 ### Drop target
-One large dashed zone, centred: "Перетащите запись встречи" and the formats, with the primary button. The old empty-state card beside it is gone — there is exactly one dashed target.
+One large dashed zone, centred, doubled as the onboarding panel (see Onboarding). The old empty-state card is gone — there is exactly one dashed target, and it explains the product instead of only inviting a drop.
 
 ### Settings strip
 A slate band under the header: the model field, the OpenRouter key status (emerald / amber by state), and a one-line note that the key lives in `.env`.
 
 ### History index
-A plain list, not cards: each row is the file name plus a mono `date · N ПДн`; the active row is blue on slate-100; a `×` appears on hover to delete.
+A plain list, not cards: a bordered `Поиск` field above it, each row the file name plus a mono `date · N ПДн`; the active row is blue on slate-100. On hover a `✎` renames the row in place (the name becomes an input; Enter commits, Escape cancels) and a `×` deletes it. An unmatched search reads «Ничего не найдено».
+
+### Print
+`Печать / PDF` drops all chrome — app bar, history, action rows, copy buttons (`no-print`) — and prints the document on `18mm` page margins. Export needs no extra dependency: the browser's own PDF printer is the exporter.
 
 ## Do's and Don'ts
 

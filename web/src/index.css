@@ -194,3 +194,101 @@ body {
     @apply font-sans;
   }
 }
+
+/* Printing the protocol: the on-screen chrome (app bar, history, action
+   buttons) is noise on paper, so it drops out and the document uses the page. */
+@media print {
+  @page {
+    margin: 18mm;
+  }
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #ffffff;
+  }
+  main {
+    max-width: none !important;
+  }
+}
+
+/* Dark theme. The app leans on literal palette utilities, so the theme is a set
+   of overrides scoped to .dark. These rules sit outside Tailwind's layers, so
+   they win over the utilities without touching every component. */
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-paper: #0b1120;
+  --color-ink: #e5e7eb;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --ring: #2563eb;
+  --surface: #0f172a;
+  --surface-2: #111c34;
+  --line: #1e293b;
+  --line-2: #334155;
+  --hover: #1b2740;
+  --ink-2: #cbd5e1;
+  --ink-3: #94a3b8;
+  --accent-ink: #93c5fd;
+}
+
+.dark .bg-white { background-color: var(--surface); }
+.dark .bg-slate-50 { background-color: var(--surface-2); }
+.dark .bg-slate-100 { background-color: var(--hover); }
+.dark .bg-slate-200 { background-color: var(--line-2); }
+.dark .bg-blue-50 { background-color: #172554; }
+.dark .bg-red-50 { background-color: #3b1d1d; }
+.dark .bg-amber-50 { background-color: #3a2c12; }
+.dark .hover\:bg-slate-50:hover { background-color: var(--hover); }
+.dark .hover\:bg-blue-800:hover { background-color: #1e40af; }
+
+.dark .text-slate-900 { color: #f1f5f9; }
+.dark .text-slate-800 { color: #e2e8f0; }
+.dark .text-slate-700 { color: var(--ink-2); }
+.dark .text-slate-600 { color: var(--ink-2); }
+.dark .text-slate-500 { color: var(--ink-3); }
+.dark .text-slate-400 { color: #7c8aa0; }
+.dark .text-slate-300 { color: #64748b; }
+.dark .text-blue-700 { color: var(--accent-ink); }
+.dark .text-emerald-700 { color: #6ee7b7; }
+.dark .text-amber-700 { color: #fcd34d; }
+.dark .text-amber-800 { color: #fde68a; }
+.dark .text-amber-900 { color: #fef3c7; }
+.dark .text-red-800 { color: #fecaca; }
+.dark .text-red-900 { color: #fee2e2; }
+
+.dark .border-slate-100 { border-color: var(--line); }
+.dark .border-slate-200 { border-color: var(--line); }
+.dark .border-slate-300 { border-color: var(--line-2); }
+.dark .border-red-400 { border-color: #7f1d1d; }
+.dark .border-amber-400 { border-color: #78350f; }
+
+.dark .ring-blue-300 { --tw-ring-color: #1d4ed8; }
+
+.dark .hover\:text-slate-900:hover { color: #f1f5f9; }
+.dark .hover\:text-slate-800:hover { color: #e2e8f0; }
+.dark .hover\:text-slate-700:hover { color: var(--ink-2); }
+.dark .hover\:text-slate-600:hover { color: var(--ink-2); }
+
+.dark .placeholder\:text-slate-400::placeholder { color: #64748b; }
+
+/* Chips: same type→colour mapping, darkened so they read on the dark page. */
+.dark .chip-PERSON { background: #1e3a8a; border-color: #1e40af; color: #dbeafe; }
+.dark .chip-ADDRESS { background: #14532d; border-color: #166534; color: #dcfce7; }
+.dark .chip-PHONE { background: #78350f; border-color: #92400e; color: #fef3c7; }
+.dark .chip-EMAIL { background: #4c1d95; border-color: #5b21b6; color: #ede9fe; }
+.dark .chip-PASSPORT,
+.dark .chip-INN,
+.dark .chip-SNILS,
+.dark .chip-OMS,
+.dark .chip-CARD,
+.dark .chip-DRIVER_LICENSE,
+.dark .chip-MILITARY_ID,
+.dark .chip-BIRTH_CERTIFICATE { background: #7f1d1d; border-color: #991b1b; color: #fee2e2; }
+.dark .chip-URL,
+.dark .chip-IP { background: #334155; border-color: #475569; color: #e2e8f0; }
+.dark .chip-OTHER { background: #1e293b; border-color: #334155; color: #cbd5e1; }
