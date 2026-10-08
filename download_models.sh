@@ -3,7 +3,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-mkdir -p models/gigaam models/rubert-pii
+mkdir -p models/gigaam models/rubert-pii models/diarization/segmentation
 
 fetch() {
   local url="$1" out="$2"
@@ -32,6 +32,15 @@ fetch "$PII/config.json"                models/rubert-pii/config.json
 fetch "$PII/tokenizer.json"             models/rubert-pii/tokenizer.json
 fetch "$PII/tokenizer_config.json"      models/rubert-pii/tokenizer_config.json
 
+# Speaker diarization (~44 MB): pyannote segmentation marks speaker changes and
+# a 3D-Speaker ERes2Net model embeds each turn, so the transcript can be split
+# by speaker. Optional — the app runs without these, just without speaker labels.
+SEG="https://huggingface.co/onnx-community/pyannote-segmentation-3.0/resolve/main"
+EMB="https://huggingface.co/onemira/eres2net-base-3dspeaker-onnx/resolve/main"
+fetch "$SEG/config.json"                models/diarization/segmentation/config.json
+fetch "$SEG/onnx/model.onnx"            models/diarization/segmentation/model.onnx
+fetch "$EMB/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx" models/diarization/embedding.onnx
+
 echo
 echo "Done. Model files:"
-du -sh models/gigaam models/rubert-pii
+du -sh models/gigaam models/rubert-pii models/diarization

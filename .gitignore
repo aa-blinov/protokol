@@ -9,5 +9,6 @@ release/
 .env
 models/gigaam/
 models/rubert-pii/
+models/diarization/
 .playwright-mcp/
 tsconfig.tsbuildinfo

@@ -55,6 +55,14 @@ class LLMResponse(BaseModel):
     tokens_out: int | None = None
 
 
+class SpeakerSegment(BaseModel):
+    speaker: int = Field(description="Speaker index, 0-based")
+    start: float = Field(description="Turn start, seconds")
+    end: float = Field(description="Turn end, seconds")
+    text: str = Field(description="Transcript of this turn")
+    offset: int = Field(default=0, description="Char offset of this turn's text in the full transcript")
+
+
 class ProcessResult(BaseModel):
     transcript: str
     masked_text: str
@@ -64,6 +72,10 @@ class ProcessResult(BaseModel):
     reply: str
     reply_unmasked: str
     duration_sec: float
+    segments: list[SpeakerSegment] = Field(
+        default_factory=list,
+        description="Speaker turns with their text; empty when diarization is unavailable or the audio is single-speaker",
+    )
     timings: dict[str, float] = Field(default_factory=dict, description="Stage timings in seconds")
 
 

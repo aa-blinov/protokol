@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { processAudio, type ProcessResult, type ProgressEvent, type Session } from "./api";
+import { processAudio, type Entity, type ProcessResult, type ProgressEvent, type Session } from "./api";
 import { chipClass, Highlighted, MaskedView } from "./Highlight";
 import { Badge, Button, Card, EmptyState, ProgressBar } from "./ui";
 
@@ -8,6 +8,31 @@ import { Badge, Button, Card, EmptyState, ProgressBar } from "./ui";
 function pluralRu(n: number, one: string, few: string, many: string): string {
   const rule = new Intl.PluralRules("ru").select(n);
   return rule === "one" ? one : rule === "few" ? few : many;
+}
+
+// Entities carry offsets into the whole transcript; a speaker turn shows only
+// the spans inside its own slice, shifted to the slice's start.
+function entitiesWithin(entities: Entity[], offset: number, length: number): Entity[] {
+  const end = offset + length;
+  return entities
+    .filter((entity) => entity.start >= offset && entity.end <= end)
+    .map((entity) => ({ ...entity, start: entity.start - offset, end: entity.end - offset }));
+}
+
+const SPEAKER_STYLES = [
+  "border-blue-200 bg-blue-50 text-blue-800",
+  "border-amber-200 bg-amber-50 text-amber-800",
+  "border-emerald-200 bg-emerald-50 text-emerald-800",
+  "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800",
+];
+
+function speakerLabel(speaker: number): string {
+  return `Спикер ${speaker + 1}`;
+}
+
+function formatTime(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
 const STORAGE_KEY = "sttshka.sessions";
@@ -191,8 +216,49 @@ export default function App() {
                 ))}
               </div>
 
-              <Card title="1 · Транскрипция" accent="#64748b">
-                <Highlighted text={result.transcript} entities={result.entities} />
+              <Card
+                title="1 · Транскрипция"
+                accent="#64748b"
+                meta={
+                  result.segments.length > 0 ? (
+                    <span>
+                      {new Set(result.segments.map((segment) => segment.speaker)).size}{" "}
+                      {pluralRu(
+                        new Set(result.segments.map((segment) => segment.speaker)).size,
+                        "спикер",
+                        "спикера",
+                        "спикеров",
+                      )}
+                    </span>
+                  ) : undefined
+                }
+              >
+                {result.segments.length > 0 ? (
+                  <ul className="space-y-3">
+                    {result.segments.map((segment, index) => (
+                      <li key={index} className="flex gap-3">
+                        <div className="flex w-24 shrink-0 flex-col items-start gap-1">
+                          <span
+                            className={`rounded-md border px-1.5 py-0.5 text-xs font-medium ${
+                              SPEAKER_STYLES[segment.speaker % SPEAKER_STYLES.length]
+                            }`}
+                          >
+                            {speakerLabel(segment.speaker)}
+                          </span>
+                          <span className="font-mono text-[11px] text-slate-400">{formatTime(segment.start)}</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <Highlighted
+                            text={segment.text}
+                            entities={entitiesWithin(result.entities, segment.offset, segment.text.length)}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <Highlighted text={result.transcript} entities={result.entities} />
+                )}
               </Card>
 
               <Card

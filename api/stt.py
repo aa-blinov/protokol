@@ -73,6 +73,15 @@ class Stt:
         duration = len(samples) / TARGET_SAMPLE_RATE
         if duration > MAX_AUDIO_SECONDS:
             raise ValueError(f"Audio is {duration:.0f}s, limit is {MAX_AUDIO_SECONDS}s")
+        return self.transcribe_samples(samples), duration
+
+    @staticmethod
+    def decode(audio: bytes) -> np.ndarray:
+        """Raw audio bytes -> 16 kHz mono int16 samples (public wrapper)."""
+        return Stt._decode(audio)
+
+    def transcribe_samples(self, samples: np.ndarray) -> str:
+        """Recognize already-decoded 16 kHz mono samples, splitting long audio."""
         chunks = self._split_long(samples)
         texts: list[str] = []
         with tempfile.TemporaryDirectory() as tmp:
@@ -80,7 +89,7 @@ class Stt:
                 wav_path = Path(tmp) / f"chunk{index}.wav"
                 self._write_wav(chunk, wav_path)
                 texts.append(self.model.recognize(str(wav_path)).strip())
-        return " ".join(text for text in texts if text), duration
+        return " ".join(text for text in texts if text)
 
     @classmethod
     def _split_long(cls, samples: np.ndarray, max_seconds: float = SEGMENT_MAX_SECONDS) -> list[np.ndarray]:

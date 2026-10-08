@@ -18,10 +18,11 @@ from fastapi.staticfiles import StaticFiles
 
 import config
 import schemas
+from diarization import Diarizer
 from llm import DEFAULT_MODEL, LlmError, OpenRouterClient
 from masking import mask, unmask
 from ner import PiiNer
-from stt import Stt
+from stt import MAX_AUDIO_SECONDS, TARGET_SAMPLE_RATE, Stt
 
 log = logging.getLogger("sttshka")
 app = FastAPI(title="STT → PII → OpenRouter", version="0.1.0")
@@ -70,6 +71,34 @@ def get_llm() -> OpenRouterClient:
     return OpenRouterClient(config.OPENROUTER_API_KEY, config.OPENROUTER_BASE_URL)
 
 
+_diarizer: Diarizer | None = None
+_diarizer_checked = False
+
+
+def get_diarizer() -> Diarizer | None:
+    """The diarizer, or ``None`` when its models are absent.
+
+    Optional on purpose: the transcript, masking and LLM answer must keep working
+    on a machine that has only the ASR/NER models, and a single-speaker recording
+    gains nothing from diarization anyway.
+    """
+    global _diarizer, _diarizer_checked
+    if not _diarizer_checked:
+        with _load_lock:
+            if not _diarizer_checked:
+                _diarizer_checked = True
+                try:
+                    _diarizer = Diarizer(
+                        config.DIARIZATION_SEG_DIR,
+                        config.DIARIZATION_EMB_PATH,
+                        threads=config.INFERENCE_THREADS,
+                    )
+                except Exception as error:  # noqa: BLE001 - a missing/broken model must not break the pipeline
+                    log.warning("diarization unavailable: %s", error)
+                    _diarizer = None
+    return _diarizer
+
+
 def _entities_out(result) -> list[schemas.Entity]:
     return [schemas.Entity(**vars(entity)) for entity in result.entities]
 
@@ -79,6 +108,8 @@ def health() -> dict:
     return {
         "stt": (config.GIGAAM_DIR / "config.json").is_file(),
         "ner": (config.PII_NER_DIR / "model.optimized.fp32.onnx").is_file(),
+        "diarization": (config.DIARIZATION_SEG_DIR / "model.onnx").is_file()
+        and config.DIARIZATION_EMB_PATH.is_file(),
         "llm_configured": bool(config.OPENROUTER_API_KEY),
         "providers": config.ort_providers(),
         # Requested providers above can include CoreML while onnxruntime actually
@@ -140,14 +171,48 @@ async def process(
     audio = await file.read()
     if not audio:
         raise HTTPException(400, "Empty file")
-    suffix = _suffix(file.filename)
 
     def stream():
         timings: dict[str, float] = {}
         try:
             started = time.perf_counter()
             yield _line("transcribe", 5, "Транскрибация аудио")
-            text, duration = get_stt().transcribe(audio, suffix)
+            samples = Stt.decode(audio)
+            duration = len(samples) / TARGET_SAMPLE_RATE
+            if duration > MAX_AUDIO_SECONDS:
+                yield _line("error", 100, f"Аудио {duration:.0f} с, лимит {MAX_AUDIO_SECONDS} с")
+                return
+            stt = get_stt()
+            diarizer = get_diarizer()
+            segments: list[schemas.SpeakerSegment] = []
+            if diarizer is not None:
+                yield _line("diarize", 20, "Определение говорящих")
+                turns = diarizer.diarize(samples)
+                if len({turn.speaker for turn in turns}) > 1:
+                    # Several speakers: transcribe each turn on its own so the text
+                    # can be labelled. Single-speaker audio skips this and is
+                    # transcribed whole, as before.
+                    for turn in turns:
+                        piece = samples[int(turn.start * TARGET_SAMPLE_RATE) : int(turn.end * TARGET_SAMPLE_RATE)]
+                        turn_text = stt.transcribe_samples(piece).strip()
+                        if turn_text:
+                            segments.append(
+                                schemas.SpeakerSegment(
+                                    speaker=turn.speaker,
+                                    start=round(turn.start, 2),
+                                    end=round(turn.end, 2),
+                                    text=turn_text,
+                                )
+                            )
+            if segments:
+                # Character offsets let the UI highlight entities inside each turn.
+                offset = 0
+                for segment in segments:
+                    segment.offset = offset
+                    offset += len(segment.text) + 1
+                text = " ".join(segment.text for segment in segments)
+            else:
+                text = stt.transcribe_samples(samples)
             timings["transcribe"] = round(time.perf_counter() - started, 2)
             if not text.strip():
                 yield _line("error", 100, "В аудио не распознано речи")
@@ -172,6 +237,7 @@ async def process(
                 reply=completion.reply,
                 reply_unmasked=unmask(completion.reply, result.entity_map),
                 duration_sec=round(duration, 2),
+                segments=segments,
                 timings=timings,
             )
             yield _line("done", 100, "Готово", payload)

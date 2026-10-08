@@ -34,6 +34,10 @@ _load_env_file()
 MODELS_DIR = Path(os.getenv("MODELS_DIR", Path(__file__).resolve().parents[1] / "models"))
 GIGAAM_DIR = MODELS_DIR / "gigaam"
 PII_NER_DIR = MODELS_DIR / "rubert-pii"
+# Speaker diarization: pyannote segmentation (turn boundaries) + a 3D-Speaker
+# embedding model (who each turn is). Small (~44 MB) next to the ASR/NER models.
+DIARIZATION_SEG_DIR = MODELS_DIR / "diarization" / "segmentation"
+DIARIZATION_EMB_PATH = MODELS_DIR / "diarization" / "embedding.onnx"
 
 # Built frontend served by FastAPI itself in the desktop app. Empty disables it
 # (Docker serves the UI through nginx instead).

@@ -16,6 +16,14 @@ export interface MaskResponse {
   entities: Entity[];
 }
 
+export interface SpeakerSegment {
+  speaker: number;
+  start: number;
+  end: number;
+  text: string;
+  offset: number;
+}
+
 export interface ProcessResult {
   transcript: string;
   masked_text: string;
@@ -25,11 +33,12 @@ export interface ProcessResult {
   reply: string;
   reply_unmasked: string;
   duration_sec: number;
+  segments: SpeakerSegment[];
   timings: Record<string, number>;
 }
 
 export interface ProgressEvent {
-  stage: "transcribe" | "mask" | "llm" | "done" | "error";
+  stage: "transcribe" | "diarize" | "mask" | "llm" | "done" | "error";
   pct: number;
   message: string;
   result?: ProcessResult;
