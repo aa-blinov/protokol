@@ -17,11 +17,12 @@ import sys
 import wave
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from stt import TARGET_SAMPLE_RATE, Stt  # noqa: E402
+from stt import SEGMENT_MAX_SECONDS, TARGET_SAMPLE_RATE, Stt  # noqa: E402
 
 
 def make_wav_bytes(*, seconds: float = 0.5, rate: int = 16000, channels: int = 1) -> bytes:
@@ -114,3 +115,33 @@ def test_decodes_other_containers(container, codec):
     samples = Stt._decode(audio)
     # Lossy codecs shift length by a frame or two; assert the second, not frames.
     assert abs(len(samples) / TARGET_SAMPLE_RATE - 0.5) < 0.1
+
+
+def test_split_long_leaves_audio_that_fits_untouched():
+    samples = np.full(int(30 * TARGET_SAMPLE_RATE), 5000, dtype=np.int16)
+    chunks = Stt._split_long(samples)
+    assert len(chunks) == 1
+    assert chunks[0] is samples
+
+
+def test_split_long_covers_every_sample_and_respects_the_cap():
+    # 5 minutes -> at least ceil(300 / 120) = 3 chunks.
+    total = int(300 * TARGET_SAMPLE_RATE)
+    samples = np.full(total, 5000, dtype=np.int16)
+    chunks = Stt._split_long(samples)
+    assert len(chunks) >= 3
+    assert sum(len(chunk) for chunk in chunks) == total
+    assert all(len(chunk) <= int(SEGMENT_MAX_SECONDS * TARGET_SAMPLE_RATE) + 1 for chunk in chunks)
+
+
+def test_split_long_cuts_on_the_quietest_frame_near_the_limit():
+    # A tone with one clear silence inside the search window of the first
+    # chunk (the last 40% before 120 s). The cut must land in that silence,
+    # not at a fixed 120 s grid line.
+    total = int(300 * TARGET_SAMPLE_RATE)
+    samples = np.full(total, 5000, dtype=np.int16)
+    silence_start, silence_end = 100 * TARGET_SAMPLE_RATE, 101 * TARGET_SAMPLE_RATE
+    samples[silence_start:silence_end] = 0
+
+    chunks = Stt._split_long(samples)
+    assert silence_start <= len(chunks[0]) <= silence_end + 1

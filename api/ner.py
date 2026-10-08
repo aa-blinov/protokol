@@ -86,6 +86,28 @@ def decode_window(text: str, offsets, logits, id2label: dict[int, str], min_conf
     return entities
 
 
+def window_starts(n_tokens: int, window: int = MAX_LENGTH - 2, step: int | None = None) -> list[int]:
+    """Token offsets of the sliding windows that cover ``n_tokens`` completely.
+
+    The tokenizer's own ``return_overflowing_tokens`` is not trusted here: on
+    transformers 5.19 it produced a second window shorter than the remaining
+    text (722 tokens -> windows of 512 + 135, chars 0..1967 + 1469..1976), so
+    everything past ~1976 chars was never classified and PII leaked unmasked.
+    Computing the windows from the full token list guarantees the tail is
+    covered. ``step`` defaults to ``window - STRIDE``.
+    """
+    if n_tokens <= 0:
+        return []
+    step = step if step is not None else window - STRIDE
+    starts = list(range(0, n_tokens, step))
+    # The last window must reach the final token; when the fixed step would
+    # leave a tail shorter than `window`, extend the last window back instead
+    # of adding a sliver.
+    if len(starts) > 1 and starts[-1] + window > n_tokens:
+        starts[-1] = max(0, n_tokens - window)
+    return starts
+
+
 class PiiNer:
     """Recognize PII spans. Construct once and reuse; ``predict`` is thread-safe."""
 
@@ -117,20 +139,28 @@ class PiiNer:
     def predict(self, text: str) -> list[Span]:
         if not text.strip():
             return []
-        encoded = self.tokenizer(
-            text,
-            truncation=True,
-            max_length=MAX_LENGTH,
-            stride=STRIDE,
-            return_overflowing_tokens=True,
-            return_offsets_mapping=True,
-            padding=False,
-        )
+        # Full token list, no truncation: the windows are built from it below,
+        # so no part of the text can fall outside them.
+        encoded = self.tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
+        token_ids = encoded["input_ids"]
+        token_offsets = encoded["offset_mapping"]
+        cls_id, sep_id = self.tokenizer.cls_token_id, self.tokenizer.sep_token_id
+        window = MAX_LENGTH - 2
+
         raw: list[dict] = []
         with self._lock:
-            for index in range(len(encoded["input_ids"])):
-                offsets = encoded["offset_mapping"][index]
-                features = {name: np.asarray([encoded[name][index]], dtype=np.int64) for name in self.input_names}
+            for start in window_starts(len(token_ids), window):
+                chunk_ids = token_ids[start : start + window]
+                chunk_offsets = token_offsets[start : start + window]
+                input_ids = [cls_id, *chunk_ids, sep_id]
+                # [CLS]/[SEP] carry offset (0, 0), which decode_window drops.
+                offsets = [(0, 0), *chunk_offsets, (0, 0)]
+                features = {
+                    "input_ids": np.asarray([input_ids], dtype=np.int64),
+                    "attention_mask": np.ones((1, len(input_ids)), dtype=np.int64),
+                    "token_type_ids": np.zeros((1, len(input_ids)), dtype=np.int64),
+                }
+                features = {name: features[name] for name in self.input_names}
                 if "token_type_ids" not in features:
                     features["token_type_ids"] = np.zeros_like(features["input_ids"])
                 logits = self.session.run(["logits"], features)[0]

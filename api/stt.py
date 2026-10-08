@@ -16,6 +16,13 @@ Decoded samples are written to a WAV and handed to ``recognize`` as a path, not
 as an array: ``onnx_asr`` does not renormalise arrays, so passing samples would
 mean reproducing its int16->float32 scaling exactly to avoid silently degrading
 accuracy. Letting it read the WAV keeps that step in its hands.
+
+Long audio is split first. GigaAM's ONNX graph is exported with a fixed
+attention span: somewhere past ~200 s the encoder raises an ONNX broadcast
+error instead of transcribing (measured: 180 s fine, 210 s fails), so a meeting
+cannot be handed over in one call. Chunks are cut at the quietest frame near
+the limit rather than on a fixed grid, so a cut rarely lands mid-word. The cap
+stays well under the model limit to leave margin across quantizations.
 """
 
 from __future__ import annotations
@@ -35,6 +42,12 @@ import config
 MODEL_NAME = "gigaam-v3-e2e-ctc"
 TARGET_SAMPLE_RATE = 16_000
 MAX_AUDIO_SECONDS = 60 * 60  # one hour; a meeting, not a call centre
+
+# The model's own ceiling is ~200 s (see the module docstring); 120 s keeps a
+# wide margin and still gives each chunk plenty of context.
+SEGMENT_MAX_SECONDS = 120.0
+_FRAME_MS = 20
+_HOP_MS = 10
 
 
 class Stt:
@@ -60,11 +73,45 @@ class Stt:
         duration = len(samples) / TARGET_SAMPLE_RATE
         if duration > MAX_AUDIO_SECONDS:
             raise ValueError(f"Audio is {duration:.0f}s, limit is {MAX_AUDIO_SECONDS}s")
+        chunks = self._split_long(samples)
+        texts: list[str] = []
         with tempfile.TemporaryDirectory() as tmp:
-            wav_path = Path(tmp) / "audio.wav"
-            self._write_wav(samples, wav_path)
-            text = self.model.recognize(str(wav_path))
-        return text, duration
+            for index, chunk in enumerate(chunks):
+                wav_path = Path(tmp) / f"chunk{index}.wav"
+                self._write_wav(chunk, wav_path)
+                texts.append(self.model.recognize(str(wav_path)).strip())
+        return " ".join(text for text in texts if text), duration
+
+    @classmethod
+    def _split_long(cls, samples: np.ndarray, max_seconds: float = SEGMENT_MAX_SECONDS) -> list[np.ndarray]:
+        """Cut int16 mono samples into chunks of at most ``max_seconds``.
+
+        Each cut lands on the quietest 10 ms frame in the last 40% before the
+        limit (a VAD-lite split on frame energy), so a cut rarely splits a word.
+        Audio that already fits, or is too short to hold a frame, is returned
+        as a single chunk and never touched.
+        """
+        frame = int(TARGET_SAMPLE_RATE * _FRAME_MS / 1000)
+        hop = int(TARGET_SAMPLE_RATE * _HOP_MS / 1000)
+        max_len = int(max_seconds * TARGET_SAMPLE_RATE)
+        if len(samples) <= max_len or len(samples) < frame:
+            return [samples]
+
+        frames = np.lib.stride_tricks.sliding_window_view(samples.astype(np.float32), frame)[::hop]
+        energy = np.sqrt(np.mean(frames * frames, axis=1) + 1e-9)
+
+        chunks: list[np.ndarray] = []
+        start = 0
+        while len(samples) - start > max_len:
+            limit = start + max_len
+            low = min(max(start + int(max_len * 0.6), 0) // hop, len(energy) - 1)
+            high = min(limit // hop, len(energy))
+            cut = (low + int(np.argmin(energy[low:high]))) * hop + frame // 2
+            cut = min(max(cut, start + hop), limit)
+            chunks.append(samples[start:cut])
+            start = cut
+        chunks.append(samples[start:])
+        return [chunk for chunk in chunks if len(chunk)]
 
     @staticmethod
     def _decode(audio: bytes) -> np.ndarray:
