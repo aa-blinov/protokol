@@ -19,12 +19,10 @@ function entitiesWithin(entities: Entity[], offset: number, length: number): Ent
     .map((entity) => ({ ...entity, start: entity.start - offset, end: entity.end - offset }));
 }
 
-const SPEAKER_STYLES = [
-  "border-blue-200 bg-blue-50 text-blue-800",
-  "border-amber-200 bg-amber-50 text-amber-800",
-  "border-emerald-200 bg-emerald-50 text-emerald-800",
-  "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-800",
-];
+// Speaker labels stay monochrome: colour is reserved for masked entities
+// (DESIGN.md, "The Colour-Means-PII Rule"), so identity is carried by the
+// number and a subtle neutral shade, never a hue.
+const SPEAKER_STYLES = ["border-slate-300 bg-slate-100 text-slate-700", "border-slate-300 bg-white text-slate-700"];
 
 function speakerLabel(speaker: number): string {
   return `Спикер ${speaker + 1}`;
