@@ -37,11 +37,11 @@ The mechanism a neighbouring product could not truthfully copy: **PII never reac
 
 ## Evidence on Hand
 
-- Two UI screenshots of the real app (`docs/screenshots/app-results.png`, `docs/screenshots/app-empty.png`).
+- Seven UI screenshots of the real app in `docs/screenshots/`.
 - Wire-level proof that raw PII never crossed to the LLM: a proxied end-to-end run logged the actual request body, which contained only tokens (`PERSON_1`, `PHONE_1`) and zero occurrences of the raw values; the reply was de-masked locally to the real values. Re-verified on a 10-minute meeting and on a diarized two-speaker recording (zero raw names/phones in the request body).
 - Speaker diarization on the owner's real 12-minute call (ground truth from the owner: seven participants): the previous ERes2Net embedder merged voices into 4 labels; the CAM++ embedder returns all 7. On 16 in-the-wild VoxConverse recordings, CAM++ cuts mean DER from ~38% (ERes2Net) to ~18% while keeping the speaker count within ~2 on average.
 - **Considered and rejected:** the NVIDIA Sortformer end-to-end ONNX diarizer is more accurate on VoxConverse (~12% DER, overlap-aware, no clustering threshold) but is hard-capped at **four** speakers, so it cannot represent a seven-person call. The embedding + clustering path was kept for that reason.
-- 62 passing unit/integration tests; end-to-end runs against the live LLM provider.
+- 67 passing unit tests; end-to-end runs against the live LLM provider.
 - **Absence to respect:** there are no customers, testimonials, benchmarks, pricing, or market claims. This is a private personal tool. Future work must not fabricate any of these.
 
 ## Product Principles
