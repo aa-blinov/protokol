@@ -107,6 +107,18 @@ def _cosine_similarity(embeddings: np.ndarray) -> np.ndarray:
     return normalized @ normalized.T
 
 
+def _cmn(features: np.ndarray) -> np.ndarray:
+    """Per-utterance mean normalisation over time.
+
+    CAM++ expects features centred over time. The fbank output is
+    (batch, time, 80), so the shape check matters: a transposed or unbatched
+    array would centre each frame over its 80 bins and give garbage with no error.
+    """
+    if features.ndim != 3 or features.shape[2] != 80:
+        raise ValueError(f"expected (batch, time, 80) fbank features, got {features.shape}")
+    return features - features.mean(axis=1, keepdims=True)
+
+
 def cluster_embeddings(embeddings: np.ndarray, threshold: float = _CLUSTER_THRESHOLD) -> list[int]:
     """Agglomerative average-linkage clustering over cosine similarity.
 
@@ -222,6 +234,22 @@ def fold_small_clusters(
     return result
 
 
+def _borrow_short_turns(turns: list[Turn], anchors: list[Turn]) -> list[Turn]:
+    """Short turns take the speaker of the nearest long, labelled turn in time.
+
+    Only ``anchors`` are candidates. Borrowing from earlier borrows would let one
+    speaker spread along a chain of short turns.
+    """
+    borrowed: list[Turn] = []
+    for turn in turns:
+        if (turn.end - turn.start) >= _MIN_EMBED_SECONDS:
+            continue
+        # ponytail: linear scan over anchors, O(short x long); bisect if a profile shows it.
+        nearest = min(anchors, key=lambda a: min(abs(a.start - turn.end), abs(turn.start - a.end)))
+        borrowed.append(Turn(turn.start, turn.end, nearest.speaker))
+    return borrowed
+
+
 class Diarizer:
     """Recognize speaker turns. Construct once and reuse; ``diarize`` is thread-safe."""
 
@@ -288,10 +316,8 @@ class Diarizer:
     def _embed(self, chunk: np.ndarray) -> np.ndarray:
         waveform = chunk[None, :].astype(np.float32)
         features, _ = self._fbank(waveform, np.array([waveform.shape[1]], dtype=np.int64))
-        # CAM++ expects per-utterance mean-normalised features; without CMN the
-        # same voice's turns drift apart and one speaker splits into several.
-        features = features - features.mean(axis=1, keepdims=True)
-        return self._embedding.run(["embedding"], {"x": features})[0][0]
+        # Without CMN the same voice's turns drift apart and one speaker splits into several.
+        return self._embedding.run(["embedding"], {"x": _cmn(features)})[0][0]
 
     def diarize(self, samples: np.ndarray) -> list[Turn]:
         """Return the speaker turns of a 16 kHz mono recording, or ``[]`` when
@@ -312,11 +338,5 @@ class Diarizer:
             if len(set(labels)) > _MAX_TRUSTED_SPEAKERS:
                 labels = fold_small_clusters(embeddings, labels, [t.end - t.start for t in long_enough])
             labelled = [Turn(t.start, t.end, label) for t, label in zip(long_enough, labels)]
-            embedded = {id(t) for t in long_enough}
-            # Short turns borrow the speaker of the nearest labelled turn in time.
-            for turn in turns:
-                if id(turn) in embedded or not labelled:
-                    continue
-                nearest = min(labelled, key=lambda l: min(abs(l.start - turn.end), abs(turn.start - l.end)))
-                labelled.append(Turn(turn.start, turn.end, nearest.speaker))
-        return merge_turns(sorted(labelled, key=lambda t: t.start))
+            borrowed = _borrow_short_turns(turns, labelled)
+        return merge_turns(sorted(labelled + borrowed, key=lambda t: t.start))

@@ -15,7 +15,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from diarization import Diarizer, Turn, cluster_embeddings, fold_small_clusters, merge_turns  # noqa: E402
+from diarization import (  # noqa: E402
+    Diarizer,
+    Turn,
+    _borrow_short_turns,
+    _cmn,
+    cluster_embeddings,
+    fold_small_clusters,
+    merge_turns,
+)
 
 
 def test_merge_turns_joins_same_speaker_across_a_short_gap():
@@ -91,3 +99,24 @@ def test_fold_small_clusters_keeps_a_quiet_speaker_on_a_long_call():
 def test_diarizer_without_a_model_fails_loudly(tmp_path: Path):
     with pytest.raises(FileNotFoundError):
         Diarizer(tmp_path / "seg", tmp_path / "emb.onnx")
+
+
+def test_cmn_centres_each_bin_over_time():
+    features = np.random.default_rng(0).normal(size=(1, 50, 80)) + 5.0
+    assert np.allclose(_cmn(features).mean(axis=1), 0.0)
+
+
+@pytest.mark.parametrize("shape", [(50, 80), (1, 80, 50)])
+def test_cmn_rejects_a_fbank_shape_it_would_silently_mis_normalise(shape):
+    with pytest.raises(ValueError):
+        _cmn(np.zeros(shape))
+
+
+def test_short_turns_borrow_only_from_long_labelled_turns():
+    anchors = [Turn(0.0, 10.0, 0), Turn(10.5, 30.0, 1)]
+    # The first short turn sits by speaker 0. The second is closer to it than to
+    # the anchors, but must still take speaker 1 from the nearer anchor, not 0 via
+    # the first short turn.
+    turns = [Turn(10.1, 10.3, 9), Turn(10.32, 10.38, 9)]
+    borrowed = _borrow_short_turns(turns, anchors)
+    assert [t.speaker for t in borrowed] == [0, 1]
