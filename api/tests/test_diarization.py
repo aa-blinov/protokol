@@ -79,6 +79,15 @@ def test_fold_small_clusters_leaves_real_speakers_alone():
     assert fold_small_clusters(embeddings, labels, [8.0, 8.0, 8.0, 8.0], min_share=0.02) == labels
 
 
+def test_fold_small_clusters_keeps_a_quiet_speaker_on_a_long_call():
+    # A 110 s speaker out of 2 h is 1.5% of the speech: under the share gate,
+    # but far above a fragment's few seconds, so it must survive.
+    embeddings = np.array([_unit(0.0), _unit(0.1), _unit(1.2), _unit(1.3)])
+    labels = [0, 0, 1, 1]
+    weights = [3600.0, 3600.0, 55.0, 55.0]
+    assert fold_small_clusters(embeddings, labels, weights, min_share=0.02) == labels
+
+
 def test_diarizer_without_a_model_fails_loudly(tmp_path: Path):
     with pytest.raises(FileNotFoundError):
         Diarizer(tmp_path / "seg", tmp_path / "emb.onnx")

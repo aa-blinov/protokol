@@ -62,6 +62,10 @@ _MIN_CLUSTER_TURNS = 2
 # fragment, not a speaker — fold it into its nearest neighbour. On a noisy
 # phone call the similarity threshold still leaves a long tail of such slivers.
 _MIN_CLUSTER_SHARE = 0.02
+# ...and only if it is also a few seconds of voice. On a two-hour call 2% is
+# 144 s, so a real quiet speaker (110 s) would pass the share test alone.
+# ponytail: 20 s is a guess from the few-second slivers; calibrate on a real call.
+_MAX_FRAGMENT_SECONDS = 20.0
 # Only fold slivers when the clustering is clearly over-segmented. A real call
 # can have seven speakers; folding at six would merge one of them away, so the
 # gate sits well above a plausible meeting size.
@@ -97,6 +101,12 @@ def merge_turns(turns: list[Turn], gap: float = 0.5, max_seconds: float = 120.0)
     return [t for t in split if t.end > t.start]
 
 
+def _cosine_similarity(embeddings: np.ndarray) -> np.ndarray:
+    embeddings = np.asarray(embeddings, dtype=np.float64)
+    normalized = embeddings / (np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-9)
+    return normalized @ normalized.T
+
+
 def cluster_embeddings(embeddings: np.ndarray, threshold: float = _CLUSTER_THRESHOLD) -> list[int]:
     """Agglomerative average-linkage clustering over cosine similarity.
 
@@ -104,45 +114,58 @@ def cluster_embeddings(embeddings: np.ndarray, threshold: float = _CLUSTER_THRES
     ``threshold``; the number of speakers falls out of the data. Tiny clusters
     are folded into their most similar neighbour so a stray turn does not become
     a speaker of its own.
+
+    Keeps one cluster-by-cluster average matrix. A merge rewrites only the kept
+    cluster's row and column (Lance-Williams update), so each merge is one
+    vectorised argmax, not a rescan of every cluster pair. The matrix is dense
+    float64 n x n: about 32 MB at 2000 turns.
     """
     count = len(embeddings)
     if count == 0:
         return []
-    normalized = embeddings / (np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-9)
-    similarity = normalized @ normalized.T
-    clusters: list[list[int]] = [[i] for i in range(count)]
+    average = _cosine_similarity(embeddings)
+    np.fill_diagonal(average, -np.inf)
+    sizes = np.ones(count)
+    members: list[list[int]] = [[i] for i in range(count)]
+    alive = np.ones(count, dtype=bool)
 
-    def average(a: list[int], b: list[int]) -> float:
-        return float(similarity[np.ix_(a, b)].mean())
+    def merge(keep: int, drop: int) -> None:
+        # Average over the union is the size-weighted mean of the two averages.
+        row = (sizes[keep] * average[keep] + sizes[drop] * average[drop]) / (sizes[keep] + sizes[drop])
+        average[keep, :] = row
+        average[:, keep] = row
+        average[keep, keep] = -np.inf
+        # Dead slots stay -inf, so argmax never picks them.
+        average[drop, :] = -np.inf
+        average[:, drop] = -np.inf
+        sizes[keep] += sizes[drop]
+        members[keep] += members[drop]
+        alive[drop] = False
 
-    while len(clusters) > 1:
-        best_pair = (-1, -1)
-        best_score = -2.0
-        for i in range(len(clusters)):
-            for j in range(i + 1, len(clusters)):
-                score = average(clusters[i], clusters[j])
-                if score > best_score:
-                    best_score, best_pair = score, (i, j)
-        if best_score < threshold:
+    # ponytail: each merge argmaxes the full matrix, so a run that never hits the
+    # threshold costs ~17 s at 2000 turns; a real call stops early. Upgrade path:
+    # nearest-neighbour chain, if that ever shows up in a profile.
+    clusters = count
+    while clusters > 1:
+        i, j = divmod(int(np.argmax(average)), count)
+        if average[i, j] < threshold:
             break
-        i, j = best_pair
-        clusters[i] = clusters[i] + clusters[j]
-        del clusters[j]
+        merge(min(i, j), max(i, j))
+        clusters -= 1
 
     # Fold noise clusters (< _MIN_CLUSTER_TURNS turns) into their best neighbour.
-    while len(clusters) > 1:
-        small = [k for k, c in enumerate(clusters) if len(c) < _MIN_CLUSTER_TURNS]
-        if not small:
+    while clusters > 1:
+        small = np.flatnonzero(alive & (sizes < _MIN_CLUSTER_TURNS))
+        if small.size == 0:
             break
-        k = small[0]
-        others = [m for m in range(len(clusters)) if m != k]
-        target = max(others, key=lambda m: average(clusters[k], clusters[m]))
-        clusters[target] = clusters[target] + clusters[k]
-        del clusters[k]
+        k = int(small[0])
+        target = int(np.argmax(average[k]))
+        merge(min(k, target), max(k, target))
+        clusters -= 1
 
     labels = [0] * count
-    for speaker, members in enumerate(clusters):
-        for index in members:
+    for speaker, slot in enumerate(np.flatnonzero(alive)):
+        for index in members[slot]:
             labels[index] = speaker
     return labels
 
@@ -152,6 +175,7 @@ def fold_small_clusters(
     labels: list[int],
     weights: list[float],
     min_share: float = _MIN_CLUSTER_SHARE,
+    max_seconds: float = _MAX_FRAGMENT_SECONDS,
 ) -> list[int]:
     """Fold clusters that are a sliver of the recording into their nearest neighbour.
 
@@ -159,17 +183,17 @@ def fold_small_clusters(
     a long tail of clusters each holding a few seconds — fragments of a voice,
     not speakers. The turn-count fold above cannot see them (they have several
     turns) and lowering the similarity threshold would merge genuinely distinct
-    voices, so this separates by *share of the recording's speech*: a cluster
-    under ``min_share`` of the total is a fragment and joins the cluster it is
-    most similar to.
+    voices. A cluster is a fragment only when it is under ``min_share`` of the
+    recording's speech *and* under ``max_seconds`` of it; the second test keeps a
+    real quiet speaker on a long call. A fragment joins the cluster it is most
+    similar to.
     """
     if len(embeddings) == 0 or min_share <= 0:
         return labels
     total = float(sum(weights))
     if total <= 0:
         return labels
-    normalized = embeddings / (np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-9)
-    similarity = normalized @ normalized.T
+    similarity = _cosine_similarity(embeddings)
     groups: dict[int, list[int]] = {}
     for index, label in enumerate(labels):
         groups.setdefault(label, []).append(index)
@@ -178,7 +202,11 @@ def fold_small_clusters(
         return float(sum(weights[i] for i in members))
 
     while len(groups) > 1:
-        small = [label for label, members in groups.items() if seconds(members) / total < min_share]
+        small = [
+            label
+            for label, members in groups.items()
+            if seconds(members) / total < min_share and seconds(members) < max_seconds
+        ]
         if not small:
             break
         label = min(small, key=lambda l: seconds(groups[l]))
