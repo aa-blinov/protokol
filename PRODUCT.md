@@ -32,7 +32,7 @@ The mechanism a neighbouring product could not truthfully copy: **PII never reac
 - Entity types masked: names, phones, passports, emails, tax/insurance/medical numbers, cards, addresses, and similar (surfaced in the UI as `PERSON_1`, `PHONE_1`, `PASSPORT_1`, …).
 - Speaker diarization (CPU, ONNX: pyannote segmentation + a 3D-Speaker CAM++ embedding, then cosine clustering) splits a multi-speaker recording into turns labelled `Спикер 1/2/…`, with no cap on the speaker count. Optional — a single-speaker recording, or a machine without the two small models, skips it.
 - CPU-only inference; no GPU required.
-- Delivered as a native desktop app (Electron shell wrapping a Python inference sidecar). Models (~1.6 GB) are bundled into the app for a self-contained, nomadic install.
+- Delivered as a native desktop app (Electron shell wrapping a Python inference sidecar). Models (~0.9 GB) are bundled into the app for a self-contained, nomadic install.
 - **Hard constraint — the only one that is non-negotiable: original PII must never reach the LLM or leave the machine.** Any future work that would break this is not a trade-off; it is disallowed.
 
 ## Evidence on Hand
