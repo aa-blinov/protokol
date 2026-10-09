@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Download the ONNX models into ./models. ~1.6 GB total, run once.
+# Download the ONNX models into ./models. ~1.4 GB total, run once.
 set -euo pipefail
 
 cd "$(dirname "$0")"
-mkdir -p models/gigaam models/rubert-pii models/diarization/segmentation
+mkdir -p models/gigaam models/rubert-pii models/diarization
 
 fetch() {
   local url="$1" out="$2"
@@ -33,14 +33,12 @@ fetch "$PII/config.json"                models/rubert-pii/config.json
 fetch "$PII/tokenizer.json"             models/rubert-pii/tokenizer.json
 fetch "$PII/tokenizer_config.json"      models/rubert-pii/tokenizer_config.json
 
-# Speaker diarization (~44 MB): pyannote segmentation marks speaker changes and
-# a 3D-Speaker ERes2Net model embeds each turn, so the transcript can be split
-# by speaker. Optional — the app runs without these, just without speaker labels.
-SEG="https://huggingface.co/onnx-community/pyannote-segmentation-3.0/resolve/main"
-EMB="https://huggingface.co/onemira/eres2net-base-3dspeaker-onnx/resolve/main"
-fetch "$SEG/config.json"                models/diarization/segmentation/config.json
-fetch "$SEG/onnx/model.onnx"            models/diarization/segmentation/model.onnx
-fetch "$EMB/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx" models/diarization/embedding.onnx
+# Speaker diarization: NVIDIA Sortformer v2.1 (end-to-end, overlap-aware, up to
+# four speakers). One model replaces the old segmentation + embedding pair; it
+# needs no clustering threshold, which is what kept getting the speaker count
+# wrong on real calls. Optional — the app runs without it, just without labels.
+SF="https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2.1-onnx/resolve/main"
+fetch "$SF/diar_streaming_sortformer_4spk-v2.1.onnx"  models/diarization/sortformer.onnx
 
 echo
 echo "Done. Model files:"

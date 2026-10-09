@@ -30,7 +30,7 @@ The mechanism a neighbouring product could not truthfully copy: **PII never reac
 
 - Pipeline: audio → speech-to-text → speaker diarization (optional) → PII entity recognition → token-substitution masking → LLM → local reverse-substitution of the reply.
 - Entity types masked: names, phones, passports, emails, tax/insurance/medical numbers, cards, addresses, and similar (surfaced in the UI as `PERSON_1`, `PHONE_1`, `PASSPORT_1`, …).
-- Speaker diarization (CPU, ONNX: pyannote segmentation + 3D-Speaker embeddings) splits a multi-speaker recording into turns labelled `Спикер 1/2/…`. Optional — a single-speaker recording, or a machine without the two small models, skips it.
+- Speaker diarization is a single end-to-end ONNX model (NVIDIA Sortformer v2.1, streaming transformer, CPU, no PyTorch/NeMo) that predicts per-frame speaker activity for up to four speakers, including overlap. It splits a multi-speaker recording into turns labelled `Спикер 1/2/…`. Optional — a single-speaker recording, or a machine without the model, skips it.
 - CPU-only inference; no GPU required.
 - Delivered as a native desktop app (Electron shell wrapping a Python inference sidecar). Models (~1.6 GB) are bundled into the app for a self-contained, nomadic install.
 - **Hard constraint — the only one that is non-negotiable: original PII must never reach the LLM or leave the machine.** Any future work that would break this is not a trade-off; it is disallowed.
@@ -39,10 +39,9 @@ The mechanism a neighbouring product could not truthfully copy: **PII never reac
 
 - Two UI screenshots of the real app (`docs/screenshots/app-results.png`, `docs/screenshots/app-empty.png`).
 - Wire-level proof that raw PII never crossed to the LLM: a proxied end-to-end run logged the actual request body, which contained only tokens (`PERSON_1`, `PHONE_1`) and zero occurrences of the raw values; the reply was de-masked locally to the real values. Re-verified on a 10-minute meeting and on a diarized two-speaker recording (zero raw names/phones in the request body).
-- Speaker diarization verified on a 75-second two-speaker recording built from real Common Voice ru voices: 2 speakers found, 0% speaker confusion (all residual DER is silence inside the reference turns).
-- Diarization stability on a real noisy 12-minute phone call (`Запись звонка N3763`): clustering alone returned 20 speakers (one voice fragmented into a dozen slivers); folding clusters under ~3% of the speech — only when the clustering is clearly over-segmented — brings it to 4 without changing the 2- and 3-speaker reference results (confusion 1.9% / 1.4%).
-- **Honest limit:** on 16 in-the-wild VoxConverse recordings (1–15 speakers) diarization is rough — mean DER ~38%, speaker count often wrong in both directions. Cross-checked that this is the embedding model on noisy far-field/overlapped speech, not a tuning miss: WeSpeaker front-end variants, feature normalization, an in-domain VoxCeleb WeSpeaker model, and silhouette/eigengap auto-`k` all failed to fix it. Overlap is not modelled at all.
-- 62 passing unit/integration tests; end-to-end runs against the live LLM provider.
+- Speaker diarization: the end-to-end Sortformer model replaced the earlier pyannote-segmentation + ERes2Net-embedding + cosine-clustering stack after that stack failed on real audio — a noisy 12-minute phone call fragmented into 20 speakers, and on 16 in-the-wild VoxConverse recordings the mean DER was ~38% with the speaker count often wrong in both directions. Sorting that out by tuning (small-cluster folding, WeSpeaker front-end/normalization variants, in-domain WeSpeaker, silhouette/eigengap auto-`k`) did not generalise.
+- Speaker diarization with Sortformer, measured: on the same 16 VoxConverse recordings (≤4-speaker ones) mean DER ~12% (from ~38%) with near-correct speaker counts; on the real 12-minute phone call, 4 speakers (unchanged) but with no clustering threshold to tune. Runs on CPU at ~6× real time (12-minute call ≈ 2 minutes), same low-RTF order as the ASR.
+- 57 passing unit/integration tests; end-to-end runs against the live LLM provider.
 - **Absence to respect:** there are no customers, testimonials, benchmarks, pricing, or market claims. This is a private personal tool. Future work must not fabricate any of these.
 
 ## Product Principles

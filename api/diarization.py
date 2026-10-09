@@ -1,23 +1,22 @@
-"""Speaker diarization on CPU: who spoke when.
+"""Speaker diarization: who spoke when, via NVIDIA Sortformer (ONNX, CPU-only).
 
-CPU-only and ONNX, like the rest of the pipeline — no torch, no GPU:
+The pipeline used to segment speaker changes with pyannote, embed every turn
+with a 3D-Speaker ERes2Net model and cluster those embeddings by cosine
+similarity. On clean two- and three-speaker audio that worked, but on real
+recordings (a phone call, in-the-wild VoxConverse) a fixed threshold picked the
+wrong number of speakers — one voice fragmented into a dozen labels, or distinct
+voices merged — and no post-hoc fix (folding small clusters, silhouette,
+eigengap) was robust: tuning for one recording broke another.
 
-* ``onnx-community/pyannote-segmentation-3.0`` marks where the speaker changes
-  (its powerset head emits no-speech / speaker-1..3 / two-speaker frames);
-* 3D-Speaker ``ERes2Net`` turns each speech turn into a voice embedding;
-* average-linkage clustering over cosine similarity groups the turns into the
-  recording's speakers, and clusters that are a sliver of the recording are
-  folded into their nearest neighbour — on a noisy call the same voice lands in
-  several small clusters and would otherwise read as a dozen speakers.
+Sortformer replaces that whole stack with a single end-to-end model: a streaming
+transformer that predicts per-frame speaker activity for up to four speakers,
+including overlapping speech, and needs no clustering threshold at all. It runs
+on onnxruntime with no PyTorch/NeMo — see the vendored ``sortformer`` module.
 
-The segmentation model's own speaker indices are local — up to three per 10 s
-window, re-numbered window to window — so they only say *where* a turn begins
-and ends. The embeddings decide *who* it is across the whole recording, which is
-what makes the labels stable for a meeting longer than one window.
-
-Embeddings need the same 80-dim Kaldi fbank the model was trained on; that
-preprocessor is reused from ``onnx_asr`` rather than re-derived, so the features
-match the ASR side of the app.
+This file is the adapter the pipeline talks to: it feeds the model 16 kHz mono
+audio and converts its ``(start, end, speaker)`` segments into ``Turn`` objects,
+then merges/splits them for the ASR. Speaker labels are ordered by first arrival
+and capped at four.
 """
 
 from __future__ import annotations
@@ -27,41 +26,10 @@ from pathlib import Path
 from threading import Lock
 
 import numpy as np
-import onnx_asr
-import onnxruntime as ort
-from onnx_asr.preprocessors.numpy_preprocessor import KaldiPreprocessorNumpy
 
-import config
+from sortformer import Sortformer
 
 SAMPLE_RATE = 16_000
-
-# pyannote segmentation frame geometry, mirroring the ONNX wrapper.
-_RECEPTIVE_FIELD = 991
-_STRIDE = 270
-_OFFSET = 135
-_WINDOW_SECONDS = 10.0
-_OVERLAP_SECONDS = 5.0
-
-# A turn shorter than this carries too little voice to embed reliably.
-_MIN_EMBED_SECONDS = 0.4
-# no-speech probability at or above this is silence.
-_SPEECH_THRESHOLD = 0.5
-# Average cosine similarity below which two clusters are different speakers.
-_CLUSTER_THRESHOLD = 0.8
-# A cluster this small (in turns) is noise, not a speaker; fold it into the
-# nearest one instead of inventing a speaker for it.
-_MIN_CLUSTER_TURNS = 2
-# A cluster holding less than this share of the recording's speech is a
-# fragment, not a speaker — fold it into its nearest neighbour. On a noisy
-# phone call the similarity threshold still leaves a long tail of such slivers
-# (one voice split into a dozen), while every real speaker on the reference
-# recordings holds well above this line, so the fold leaves them untouched.
-_MIN_CLUSTER_SHARE = 0.03
-# Only trust the fold when the clustering is clearly over-segmented: at or below
-# this many clusters a small one is more likely a real, quiet speaker than a
-# fragment (measured on VoxConverse: folding unconditionally collapsed genuine
-# three-speaker recordings to one).
-_MAX_TRUSTED_SPEAKERS = 6
 
 
 @dataclass(frozen=True)
@@ -93,196 +61,31 @@ def merge_turns(turns: list[Turn], gap: float = 0.5, max_seconds: float = 120.0)
     return [t for t in split if t.end > t.start]
 
 
-def cluster_embeddings(embeddings: np.ndarray, threshold: float = _CLUSTER_THRESHOLD) -> list[int]:
-    """Agglomerative average-linkage clustering over cosine similarity.
-
-    Merges the two closest clusters while their average similarity is at least
-    ``threshold``; the number of speakers falls out of the data. Tiny clusters
-    are folded into their most similar neighbour so a stray turn does not become
-    a speaker of its own.
-    """
-    count = len(embeddings)
-    if count == 0:
-        return []
-    normalized = embeddings / (np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-9)
-    similarity = normalized @ normalized.T
-    clusters: list[list[int]] = [[i] for i in range(count)]
-
-    def average(a: list[int], b: list[int]) -> float:
-        return float(similarity[np.ix_(a, b)].mean())
-
-    while len(clusters) > 1:
-        best_pair = (-1, -1)
-        best_score = -2.0
-        for i in range(len(clusters)):
-            for j in range(i + 1, len(clusters)):
-                score = average(clusters[i], clusters[j])
-                if score > best_score:
-                    best_score, best_pair = score, (i, j)
-        if best_score < threshold:
-            break
-        i, j = best_pair
-        clusters[i] = clusters[i] + clusters[j]
-        del clusters[j]
-
-    # Fold noise clusters (< _MIN_CLUSTER_TURNS turns) into their best neighbour.
-    while len(clusters) > 1:
-        small = [k for k, c in enumerate(clusters) if len(c) < _MIN_CLUSTER_TURNS]
-        if not small:
-            break
-        k = small[0]
-        others = [m for m in range(len(clusters)) if m != k]
-        target = max(others, key=lambda m: average(clusters[k], clusters[m]))
-        clusters[target] = clusters[target] + clusters[k]
-        del clusters[k]
-
-    labels = [0] * count
-    for speaker, members in enumerate(clusters):
-        for index in members:
-            labels[index] = speaker
-    return labels
-
-
-def fold_small_clusters(
-    embeddings: np.ndarray,
-    labels: list[int],
-    weights: list[float],
-    min_share: float = _MIN_CLUSTER_SHARE,
-) -> list[int]:
-    """Fold clusters that are a sliver of the recording into their nearest neighbour.
-
-    A noisy recording (a phone call, overlapping speech, cross-talk) still leaves
-    a long tail of clusters each holding a few seconds — fragments of a voice,
-    not speakers. The turn-count fold above cannot see them (they have several
-    turns) and lowering the similarity threshold would merge genuinely distinct
-    voices, so this separates by *share of the recording's speech*: a cluster
-    under ``min_share`` of the total is a fragment and joins the cluster it is
-    most similar to. Real speakers hold far more than that share, so clean
-    recordings are returned unchanged.
-    """
-    if len(embeddings) == 0 or min_share <= 0:
-        return labels
-    total = float(sum(weights))
-    if total <= 0:
-        return labels
-    normalized = embeddings / (np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-9)
-    similarity = normalized @ normalized.T
-    groups: dict[int, list[int]] = {}
-    for index, label in enumerate(labels):
-        groups.setdefault(label, []).append(index)
-
-    def seconds(members: list[int]) -> float:
-        return float(sum(weights[i] for i in members))
-
-    while len(groups) > 1:
-        small = [label for label, members in groups.items() if seconds(members) / total < min_share]
-        if not small:
-            break
-        label = min(small, key=lambda l: seconds(groups[l]))
-        others = [o for o in groups if o != label]
-        target = max(others, key=lambda o: float(similarity[np.ix_(groups[label], groups[o])].mean()))
-        groups[target] = groups[target] + groups[label]
-        del groups[label]
-
-    result = [0] * len(labels)
-    for new_label, members in enumerate(groups.values()):
-        for index in members:
-            result[index] = new_label
-    return result
-
-
 class Diarizer:
-    """Recognize speaker turns. Construct once and reuse; ``diarize`` is thread-safe."""
+    """Recognize speaker turns with Sortformer. Construct once and reuse;
+    ``diarize`` is thread-safe."""
 
-    def __init__(
-        self,
-        segmentation_dir: str | Path,
-        embedding_path: str | Path,
-        threads: int = 4,
-        cluster_threshold: float = _CLUSTER_THRESHOLD,
-    ):
-        self.segmentation_dir = Path(segmentation_dir)
-        self.embedding_path = Path(embedding_path)
-        if not (self.segmentation_dir / "config.json").is_file() or not (
-            self.segmentation_dir / "model.onnx"
-        ).is_file():
-            raise FileNotFoundError(f"Missing diarization segmentation model in {self.segmentation_dir}")
-        if not self.embedding_path.is_file():
-            raise FileNotFoundError(f"Missing diarization embedding model: {self.embedding_path}")
-
-        self.cluster_threshold = cluster_threshold
-        providers = config.ort_providers()
-        # pyannote segmentation: loaded through onnx_asr so its powerset decoding
-        # (and the window re-ordering that keeps local speaker order stable) is
-        # the same code the library ships and tests.
-        self._vad = onnx_asr.load_vad(
-            "onnx-community/pyannote-segmentation-3.0", path=self.segmentation_dir, providers=providers
-        )
-        self._fbank = KaldiPreprocessorNumpy("wespeaker")
-        options = ort.SessionOptions()
-        options.intra_op_num_threads = threads
-        options.inter_op_num_threads = 1
-        self._embedding = ort.InferenceSession(str(self.embedding_path), options, providers=providers)
+    def __init__(self, model_path: str | Path):
+        self.model_path = Path(model_path)
+        if not self.model_path.is_file():
+            raise FileNotFoundError(f"Missing diarization model: {self.model_path}")
+        # CPU is the only provider this app ships with; the model's streaming
+        # state is mutable, so a single instance is guarded by a lock.
+        self._model = Sortformer(str(self.model_path), provider="CPUExecutionProvider")
         self._lock = Lock()
-
-    def _frames(self, samples: np.ndarray) -> list[tuple[int, int]]:
-        """Per-frame (sample position, local speaker) — ``-1`` for silence."""
-        waveform = samples[None, :].astype(np.float32)
-        window = int(_WINDOW_SECONDS * SAMPLE_RATE)
-        overlap = int(_OVERLAP_SECONDS * SAMPLE_RATE)
-        # The segmentation model windows in fixed 10 s frames, so an input
-        # shorter than one window has to be padded (with silence) or the
-        # sliding-window view is larger than the array and raises. A short clip
-        # is single-speaker in practice; padding keeps it on the normal path.
-        if waveform.shape[1] < window:
-            waveform = np.pad(waveform, ((0, 0), (0, window - waveform.shape[1])))
-        encoded = self._vad._encode(waveform, window, overlap)
-        frames: list[tuple[int, int]] = []
-        for begin, block in self._vad._decode((batch[0] for batch in encoded), window, overlap):
-            for index, row in enumerate(block):
-                position = begin + (index - 1) * _STRIDE + _RECEPTIVE_FIELD + _OFFSET
-                speaker = -1 if row[0] >= _SPEECH_THRESHOLD else int(np.argmax(row[1:4]))
-                frames.append((position, speaker))
-        return frames
-
-    def _turns(self, samples: np.ndarray) -> list[Turn]:
-        turns: list[Turn] = []
-        for position, speaker in self._frames(samples):
-            if turns and turns[-1].speaker == speaker:
-                turns[-1] = Turn(turns[-1].start, position / SAMPLE_RATE, speaker)
-            else:
-                turns.append(Turn(position / SAMPLE_RATE, position / SAMPLE_RATE, speaker))
-        return [t for t in turns if t.speaker >= 0 and t.end > t.start]
-
-    def _embed(self, chunk: np.ndarray) -> np.ndarray:
-        waveform = chunk[None, :].astype(np.float32)
-        features, _ = self._fbank(waveform, np.array([waveform.shape[1]], dtype=np.int64))
-        return self._embedding.run(["embedding"], {"x": features})[0][0]
 
     def diarize(self, samples: np.ndarray) -> list[Turn]:
         """Return the speaker turns of a 16 kHz mono recording, or ``[]`` when
         there is no speech."""
-        if len(samples) < _RECEPTIVE_FIELD:
+        if len(samples) == 0:
             return []
+        # int16 samples -> the float [-1, 1] waveform the model expects.
+        audio = (samples.astype(np.float32) / 32768.0).tolist()
         with self._lock:
-            turns = self._turns(samples)
-            long_enough = [t for t in turns if (t.end - t.start) >= _MIN_EMBED_SECONDS]
-            if not long_enough:
-                return []
-            embeddings = np.asarray(
-                [self._embed(samples[int(t.start * SAMPLE_RATE) : int(t.end * SAMPLE_RATE)]) for t in long_enough]
-            )
-            labels = cluster_embeddings(embeddings, self.cluster_threshold)
-            # Only fold slivers when the clustering is clearly over-segmented;
-            # at a small cluster count a small cluster is probably a real voice.
-            if len(set(labels)) > _MAX_TRUSTED_SPEAKERS:
-                labels = fold_small_clusters(embeddings, labels, [t.end - t.start for t in long_enough])
-            labelled = [Turn(t.start, t.end, label) for t, label in zip(long_enough, labels)]
-            embedded = {id(t) for t in long_enough}
-            # Short turns borrow the speaker of the nearest labelled turn in time.
-            for turn in turns:
-                if id(turn) in embedded or not labelled:
-                    continue
-                nearest = min(labelled, key=lambda l: min(abs(l.start - turn.end), abs(turn.start - l.end)))
-                labelled.append(Turn(turn.start, turn.end, nearest.speaker))
-        return merge_turns(sorted(labelled, key=lambda t: t.start))
+            segments = self._model.diarize(audio, SAMPLE_RATE, 1)
+        turns = [
+            Turn(float(segment.start), float(segment.end), int(segment.speaker_id))
+            for segment in segments
+            if segment.end > segment.start
+        ]
+        return merge_turns(sorted(turns, key=lambda turn: turn.start))
