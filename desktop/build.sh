@@ -5,7 +5,7 @@
 #   ./desktop/build.sh --mac    # force macOS targets (must run on a Mac)
 #   ./desktop/build.sh --linux  # force Linux targets
 #
-# Models ARE bundled into the app (~1.6 GB), so it is self-contained and
+# Models ARE bundled into the app (~1.4 GB), so it is self-contained and
 # relocatable. They must therefore be present at build time — see the check in
 # preflight and download_models.sh.
 set -euo pipefail
