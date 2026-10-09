@@ -131,7 +131,7 @@ UI: http://localhost:3000 · API: http://localhost:8000/docs
 | POST | `/api/mask` | `{"text": "..."}` | `masked_text`, `entity_map`, `entities` |
 | POST | `/api/llm` | `{"masked_text": "...", "model": "..."}` | `reply`, `reply_unmasked` |
 | POST | `/api/process` | multipart `file` + `llm_model` | NDJSON-поток с прогрессом и результатом |
-| GET | `/api/health` | — | наличие моделей и ключа |
+| GET | `/api/health` | нет | наличие моделей и ключа |
 
 `/api/process` отдаёт поток `application/x-ndjson`: по одной JSON-строке на этап
 (`transcribe` → `mask` → `llm` → `done`), последняя несёт полный результат. Так
