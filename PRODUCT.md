@@ -30,7 +30,7 @@ The mechanism a neighbouring product could not truthfully copy: **PII never reac
 
 - Pipeline: audio → speech-to-text → speaker diarization (optional) → PII entity recognition → token-substitution masking → LLM → local reverse-substitution of the reply.
 - Entity types masked: names, phones, passports, emails, tax/insurance/medical numbers, cards, addresses, and similar (surfaced in the UI as `PERSON_1`, `PHONE_1`, `PASSPORT_1`, …).
-- Speaker diarization is a single end-to-end ONNX model (NVIDIA Sortformer v2.1, streaming transformer, CPU, no PyTorch/NeMo) that predicts per-frame speaker activity for up to four speakers, including overlap. It splits a multi-speaker recording into turns labelled `Спикер 1/2/…`. Optional — a single-speaker recording, or a machine without the model, skips it.
+- Speaker diarization (CPU, ONNX: pyannote segmentation + a 3D-Speaker CAM++ embedding, then cosine clustering) splits a multi-speaker recording into turns labelled `Спикер 1/2/…`, with no cap on the speaker count. Optional — a single-speaker recording, or a machine without the two small models, skips it.
 - CPU-only inference; no GPU required.
 - Delivered as a native desktop app (Electron shell wrapping a Python inference sidecar). Models (~1.6 GB) are bundled into the app for a self-contained, nomadic install.
 - **Hard constraint — the only one that is non-negotiable: original PII must never reach the LLM or leave the machine.** Any future work that would break this is not a trade-off; it is disallowed.
@@ -39,9 +39,9 @@ The mechanism a neighbouring product could not truthfully copy: **PII never reac
 
 - Two UI screenshots of the real app (`docs/screenshots/app-results.png`, `docs/screenshots/app-empty.png`).
 - Wire-level proof that raw PII never crossed to the LLM: a proxied end-to-end run logged the actual request body, which contained only tokens (`PERSON_1`, `PHONE_1`) and zero occurrences of the raw values; the reply was de-masked locally to the real values. Re-verified on a 10-minute meeting and on a diarized two-speaker recording (zero raw names/phones in the request body).
-- Speaker diarization: the end-to-end Sortformer model replaced the earlier pyannote-segmentation + ERes2Net-embedding + cosine-clustering stack after that stack failed on real audio — a noisy 12-minute phone call fragmented into 20 speakers, and on 16 in-the-wild VoxConverse recordings the mean DER was ~38% with the speaker count often wrong in both directions. Sorting that out by tuning (small-cluster folding, WeSpeaker front-end/normalization variants, in-domain WeSpeaker, silhouette/eigengap auto-`k`) did not generalise.
-- Speaker diarization with Sortformer, measured: on the same 16 VoxConverse recordings (≤4-speaker ones) mean DER ~12% (from ~38%) with near-correct speaker counts; on the real 12-minute phone call, 4 speakers (unchanged) but with no clustering threshold to tune. Runs on CPU at ~6× real time (12-minute call ≈ 2 minutes), same low-RTF order as the ASR.
-- 57 passing unit/integration tests; end-to-end runs against the live LLM provider.
+- Speaker diarization on the owner's real 12-minute call (ground truth from the owner: seven participants): the previous ERes2Net embedder merged voices into 4 labels; the CAM++ embedder returns all 7. On 16 in-the-wild VoxConverse recordings, CAM++ cuts mean DER from ~38% (ERes2Net) to ~18% while keeping the speaker count within ~2 on average.
+- **Considered and rejected:** the NVIDIA Sortformer end-to-end ONNX diarizer is more accurate on VoxConverse (~12% DER, overlap-aware, no clustering threshold) but is hard-capped at **four** speakers, so it cannot represent a seven-person call. The embedding + clustering path was kept for that reason.
+- 62 passing unit/integration tests; end-to-end runs against the live LLM provider.
 - **Absence to respect:** there are no customers, testimonials, benchmarks, pricing, or market claims. This is a private personal tool. Future work must not fabricate any of these.
 
 ## Product Principles

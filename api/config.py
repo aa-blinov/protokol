@@ -34,11 +34,11 @@ _load_env_file()
 MODELS_DIR = Path(os.getenv("MODELS_DIR", Path(__file__).resolve().parents[1] / "models"))
 GIGAAM_DIR = MODELS_DIR / "gigaam"
 PII_NER_DIR = MODELS_DIR / "rubert-pii"
-# Speaker diarization: the NVIDIA Sortformer ONNX model (end-to-end, overlap-aware,
-# up to four speakers). Replaces the old pyannote-segmentation + ERes2Net-embedding
-# + clustering stack — see api/diarization.py. Larger (~490 MB) than the pair it
-# replaced, but it needs no clustering threshold and gets the speaker count right.
-DIARIZATION_MODEL_PATH = MODELS_DIR / "diarization" / "sortformer.onnx"
+# Speaker diarization: pyannote segmentation (turn boundaries) + a 3D-Speaker
+# CAM++ embedding model (who each turn is), then cosine clustering. Small
+# (~33 MB) next to the ASR/NER models. See api/diarization.py for why CAM++.
+DIARIZATION_SEG_DIR = MODELS_DIR / "diarization" / "segmentation"
+DIARIZATION_EMB_PATH = MODELS_DIR / "diarization" / "embedding.onnx"
 
 # Built frontend served by FastAPI itself in the desktop app. Empty disables it
 # (Docker serves the UI through nginx instead).

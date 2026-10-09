@@ -65,12 +65,12 @@ if [ "$MISSING" -eq 1 ]; then
   note "модели вшиваются при сборке: выполните ./download_models.sh и пересоберите ./desktop/build.sh"
 fi
 
-# Diarization ships as one optional (~490 MB) model. Missing it is not fatal —
-# the app just cannot label speakers — so this is a note, not a failure.
-if [ -s "$MODELS_DIR/diarization/sortformer.onnx" ]; then
-  ok "модель диаризации на месте"
+# Diarization ships as two small (~33 MB) optional models. Missing them is not
+# fatal — the app just cannot label speakers — so this is a note, not a failure.
+if [ -s "$MODELS_DIR/diarization/segmentation/model.onnx" ] && [ -s "$MODELS_DIR/diarization/embedding.onnx" ]; then
+  ok "модели диаризации на месте"
 else
-  note "модель диаризации не вшита: разбивка по говорящим будет недоступна (./download_models.sh)"
+  note "модели диаризации не вшиты: разбивка по говорящим будет недоступна (./download_models.sh)"
 fi
 
 # ------------------------------------------- launch sidecar and probe it

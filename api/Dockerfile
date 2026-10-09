@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app
 
-# Models are large (~1.4 GB) and are mounted at runtime, not baked into the image.
+# Models are large (~0.9 GB) and are mounted at runtime, not baked into the image.
 ENV MODELS_DIR=/app/models
 EXPOSE 8000
 

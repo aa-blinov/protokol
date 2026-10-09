@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Download the ONNX models into ./models. ~1.4 GB total, run once.
+# Download the ONNX models into ./models. ~0.9 GB total, run once.
 set -euo pipefail
 
 cd "$(dirname "$0")"
-mkdir -p models/gigaam models/rubert-pii models/diarization
+mkdir -p models/gigaam models/rubert-pii models/diarization/segmentation
 
 fetch() {
   local url="$1" out="$2"
@@ -33,12 +33,16 @@ fetch "$PII/config.json"                models/rubert-pii/config.json
 fetch "$PII/tokenizer.json"             models/rubert-pii/tokenizer.json
 fetch "$PII/tokenizer_config.json"      models/rubert-pii/tokenizer_config.json
 
-# Speaker diarization: NVIDIA Sortformer v2.1 (end-to-end, overlap-aware, up to
-# four speakers). One model replaces the old segmentation + embedding pair; it
-# needs no clustering threshold, which is what kept getting the speaker count
-# wrong on real calls. Optional — the app runs without it, just without labels.
-SF="https://huggingface.co/cgus/diar_streaming_sortformer_4spk-v2.1-onnx/resolve/main"
-fetch "$SF/diar_streaming_sortformer_4spk-v2.1.onnx"  models/diarization/sortformer.onnx
+# Speaker diarization (~33 MB): pyannote segmentation marks speaker changes and a
+# 3D-Speaker CAM++ model embeds every turn; cosine clustering groups them. CAM++
+# separates more speakers than the ERes2Net it replaced (7 on a real call vs 4),
+# and roughly halves the error on in-the-wild recordings. Optional — the app runs
+# without it, just without speaker labels.
+SEG="https://huggingface.co/onnx-community/pyannote-segmentation-3.0/resolve/main"
+EMB="https://huggingface.co/Luigi/campplus-zh-en-onnx/resolve/main"
+fetch "$SEG/config.json"                models/diarization/segmentation/config.json
+fetch "$SEG/onnx/model.onnx"            models/diarization/segmentation/model.onnx
+fetch "$EMB/campplus_zh_en_fp32.onnx"   models/diarization/embedding.onnx
 
 echo
 echo "Done. Model files:"

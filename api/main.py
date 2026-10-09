@@ -90,7 +90,11 @@ def get_diarizer() -> Diarizer | None:
             if not _diarizer_checked:
                 _diarizer_checked = True
                 try:
-                    _diarizer = Diarizer(config.DIARIZATION_MODEL_PATH)
+                    _diarizer = Diarizer(
+                        config.DIARIZATION_SEG_DIR,
+                        config.DIARIZATION_EMB_PATH,
+                        threads=config.INFERENCE_THREADS,
+                    )
                 except Exception as error:  # noqa: BLE001 - a missing/broken model must not break the pipeline
                     log.warning("diarization unavailable: %s", error)
                     _diarizer = None
@@ -116,7 +120,8 @@ def health() -> dict:
     return {
         "stt": (config.GIGAAM_DIR / "config.json").is_file(),
         "ner": (config.PII_NER_DIR / "model.optimized.fp32.onnx").is_file(),
-        "diarization": config.DIARIZATION_MODEL_PATH.is_file(),
+        "diarization": (config.DIARIZATION_SEG_DIR / "model.onnx").is_file()
+        and config.DIARIZATION_EMB_PATH.is_file(),
         "llm_configured": bool(config.OPENROUTER_API_KEY),
         "providers": config.ort_providers(),
         # Requested providers above can include CoreML while onnxruntime actually
