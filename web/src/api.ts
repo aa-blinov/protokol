@@ -96,7 +96,12 @@ const jsonHeaders = { "Content-Type": "application/json" };
  *  app needs to be told that, not shown the inside of Chromium's error. */
 async function request(input: string, init?: RequestInit): Promise<Response> {
   try {
-    return await request(input, init);
+    // `fetch`, not `request`: a bulk rename of `await fetch(` to
+    // `await request(` once rewrote this line too, so the wrapper called itself
+    // forever. The resulting RangeError was caught by the wrapper's own catch,
+    // turned into "connection lost", and swallowed by the callers — every
+    // request in the app failed silently and the history rendered empty.
+    return await fetch(input, init);
   } catch {
     throw new Error(
       "Связь с внутренним сервисом прервалась. Закройте и снова откройте приложение, затем повторите.",
