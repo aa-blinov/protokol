@@ -55,6 +55,22 @@ body {
 .chip-IP { background: #e2e8f0; border-color: #cbd5e1; color: #0f172a; }
 .chip-OTHER { background: #f1f5f9; border-color: #cbd5e1; color: #334155; }
 
+/* Search hits in the transcript. Amber for every match, a hard outline on the
+   one currently being looked at -- a transcript is several screens long, and
+   "which of these forty is this" needs to be answerable without counting. */
+.hit {
+  background: #fef08a;
+  color: inherit;
+  border-radius: 2px;
+}
+
+.hit-current {
+  background: #f59e0b;
+  color: #1c1917;
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px #b45309;
+}
+
 .focus-ring:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
@@ -292,3 +308,15 @@ body {
 .dark .chip-URL,
 .dark .chip-IP { background: #334155; border-color: #475569; color: #e2e8f0; }
 .dark .chip-OTHER { background: #1e293b; border-color: #334155; color: #cbd5e1; }
+.dark .hit { background: #713f12; color: #fef9c3; }
+.dark .hit-current { background: #f59e0b; color: #1c1917; }
+/* Focus and error colours for dark theme.
+   `.dark .border-slate-200` above sits outside the Tailwind layers, so it beats
+   `focus:border-slate-400` on the cascade order and the focus ring on every
+   input simply never appeared in dark mode. These have to sit outside too, or
+   they lose the same fight. */
+.dark .border-slate-400 { border-color: var(--accent-ink); }
+.dark .border-slate-300:focus,
+.dark .border-slate-400:focus { border-color: var(--accent-ink); }
+.dark .text-red-700 { color: #fca5a5; }
+.dark .bg-red-50 .text-red-900 { color: #fee2e2; }

@@ -22,6 +22,8 @@ export function Button({
   type = "button",
   ariaLabel,
   ariaExpanded,
+  size = "md",
+  className,
 }: {
   children: ReactNode;
   onClick?: () => void;
@@ -30,6 +32,11 @@ export function Button({
   type?: "button" | "submit";
   ariaLabel?: string;
   ariaExpanded?: boolean;
+  /** For placement only — layout a button should not have to carry. */
+  className?: string;
+  /** "lg" is for the one action a screen exists for. Everything else stays
+   *  at the 36 px default, which is right for a toolbar and small for a tap. */
+  size?: "md" | "lg";
 }) {
   return (
     <ButtonSurface
@@ -39,7 +46,7 @@ export function Button({
       aria-label={ariaLabel}
       aria-expanded={ariaExpanded}
       variant={variant === "primary" ? "default" : "ghost"}
-      className={`min-h-9 px-3 ${BUTTON_SURFACE[variant]}`}
+      className={`rounded-[6px] ${size === "lg" ? "min-h-12 px-6 text-base" : "min-h-9 px-3"} ${BUTTON_SURFACE[variant]} ${className ?? ""}`}
     >
       {children}
     </ButtonSurface>
@@ -51,7 +58,7 @@ export function Section({ label, meta, children }: { label: string; meta?: React
   return (
     <section className="mt-8 border-t border-slate-200 pt-5">
       <div className="mb-4 flex items-baseline justify-between gap-4">
-        <h3 className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-slate-500">{label}</h3>
+        <h3 className="font-mono text-[12px] font-medium uppercase tracking-[0.12em] text-slate-500">{label}</h3>
         {meta ? <div className="no-print text-xs text-slate-500">{meta}</div> : null}
       </div>
       {children}
@@ -316,14 +323,51 @@ export function Markdown({ text }: { text: string }) {
   return <div>{blocks}</div>;
 }
 
-export function ProgressBar({ pct, message }: { pct: number; message: string }) {
+export function ProgressBar({
+  pct,
+  message,
+  eta,
+  elapsed,
+}: {
+  pct: number;
+  message: string;
+  /** Seconds left in this stage, from how long it took last time. Null on the
+   *  first recording of a session, when nothing has been measured yet. */
+  eta?: number | null;
+  /** Seconds since the work started. Always known, unlike eta. */
+  elapsed?: number;
+}) {
   return (
-    <div className="max-w-md space-y-2">
-      <div className="flex items-baseline justify-between text-xs text-slate-600">
+    // Full width, deliberately: the bar sat at max-w-md, 448px against a drop
+    // zone nearly twice that, and a progress indicator that stops two-thirds
+    // across the area it is measuring looks like it is stuck.
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between gap-3 text-xs text-slate-600">
         <span>{message}</span>
-        <span className="font-mono tabular-nums text-slate-500">{pct}%</span>
+        <span className="flex shrink-0 items-baseline gap-2">
+          {/* One time figure, and only one we can stand behind. A previous
+              measurement gives a remainder; without one, elapsed time is the
+              honest answer -- showing nothing for the first minute reads as a
+              hang. */}
+          {eta !== null && eta !== undefined && eta > 0 ? (
+            <span className="text-slate-500">осталось примерно {humanSeconds(eta)}</span>
+          ) : elapsed ? (
+            <span className="text-slate-500">прошло {humanSeconds(elapsed)}</span>
+          ) : null}
+          <span className="font-mono tabular-nums text-slate-500">{pct}%</span>
+        </span>
       </div>
       <Progress value={pct} aria-label={message} className="h-1.5 rounded-full bg-slate-200" />
     </div>
   );
+}
+
+/** "12 с", "1 мин 10 с" -- short enough for a progress line. */
+function humanSeconds(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  if (total < 60) return `${total} с`;
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  if (m < 60) return s ? `${m} мин ${s} с` : `${m} мин`;
+  return `${Math.floor(m / 60)} ч ${m % 60} мин`;
 }
