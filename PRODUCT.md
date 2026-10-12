@@ -29,19 +29,21 @@ The mechanism a neighbouring product could not truthfully copy: **PII never reac
 ## Capabilities and Constraints
 
 - Pipeline: audio → speech-to-text → speaker diarization (optional) → PII entity recognition → token-substitution masking → LLM → local reverse-substitution of the reply.
+- The pipeline stops before the LLM call and shows the masked text in full, with a pre-flight cost estimate, so the user reads exactly what would be sent and presses the button. Transcribing is slow and free; summarising is instant and billable — keeping them as separate steps is what makes both affordable to repeat. The analysed transcript is cached by a digest of the audio, so re-running the summary in another mode costs one model call and no re-transcription (measured: 0.025 s against 1.29 s on the same file).
 - Entity types masked: names, phones, passports, emails, tax/insurance/medical numbers, cards, addresses, and similar (surfaced in the UI as `PERSON_1`, `PHONE_1`, `PASSPORT_1`, …).
 - Speaker diarization (CPU, ONNX: pyannote segmentation + a 3D-Speaker CAM++ embedding, then cosine clustering) splits a multi-speaker recording into turns labelled `Спикер 1/2/…`, with no cap on the speaker count. Optional — a single-speaker recording, or a machine without the two small models, skips it.
 - CPU-only inference; no GPU required.
-- Delivered as a native desktop app (Electron shell wrapping a Python inference sidecar). Models (~0.9 GB) are bundled into the app for a self-contained, nomadic install.
+- Delivered as a native desktop app (Electron shell wrapping a Python inference sidecar). Models (~0.7 GB) are bundled into the app for a self-contained, nomadic install.
 - **Hard constraint — the only one that is non-negotiable: original PII must never reach the LLM or leave the machine.** Any future work that would break this is not a trade-off; it is disallowed.
 
 ## Evidence on Hand
 
-- Seven UI screenshots of the real app in `docs/screenshots/`.
+- Eight UI screenshots of the real app in `docs/screenshots/`, including the pre-send review screen (`app-review.png`), shot from a real recording loaded through a real file input rather than a seeded session.
 - Wire-level proof that raw PII never crossed to the LLM: a proxied end-to-end run logged the actual request body, which contained only tokens (`PERSON_1`, `PHONE_1`) and zero occurrences of the raw values; the reply was de-masked locally to the real values. Re-verified on a 10-minute meeting and on a diarized two-speaker recording (zero raw names/phones in the request body).
 - Speaker diarization on the owner's real 12-minute call (ground truth from the owner: seven participants): the previous ERes2Net embedder merged voices into 4 labels; the CAM++ embedder returns all 7. On 16 in-the-wild VoxConverse recordings, CAM++ cuts mean DER from ~38% (ERes2Net) to ~18% while keeping the speaker count within ~2 on average.
 - **Considered and rejected:** the NVIDIA Sortformer end-to-end ONNX diarizer is more accurate on VoxConverse (~12% DER, overlap-aware, no clustering threshold) but is hard-capped at **four** speakers, so it cannot represent a seven-person call. The embedding + clustering path was kept for that reason.
-- 67 passing unit tests; end-to-end runs against the live LLM provider.
+- 171 passing unit tests; end-to-end runs against the live LLM provider.
+- The pre-send review screen is what makes principle 1 inspectable rather than merely asserted: the owner can read the complete masked text, and the tokens of the outgoing request, before anything is sent.
 - **Absence to respect:** there are no customers, testimonials, benchmarks, pricing, or market claims. This is a private personal tool. Future work must not fabricate any of these.
 
 ## Product Principles

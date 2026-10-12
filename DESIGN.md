@@ -140,13 +140,41 @@ The app-bar identity: the icon's shape — two white bars in a rounded Vault Blu
 File name as the title (`1.5rem` semibold, wraps), one mono meta line beneath, then quiet actions: `Скачать .txt` and `Печать / PDF` (outlined) and `Обработать ещё` (text). No badge row, no accent dot.
 
 ### Onboarding (empty state)
-The first run teaches the product, not just the drop zone: the brand mark, a value headline («Расшифровка встреч, которая не покидает ваш компьютер»), a one-line privacy promise, the three pipeline steps as mono labels (`01 · АУДИО  02 · МАСКИРОВАНИЕ  03 · ПРОТОКОЛ`), the primary CTA, and the accepted formats. One dashed target, now with a reason to trust it.
+The first run teaches the product, not just the drop zone: the brand mark, a plain action headline («Загрузите запись встречи»), the primary CTA at `48px`, the accepted formats, and one closing line that states the new default — that you will see what is sent and what it costs before deciding. One dashed target, now with a reason to trust it.
+
+### Pre-send review
+The screen between "the audio is transcribed" and "anything is sent". It exists because the privacy claim is only worth something if it can be inspected.
+
+- A status band, emerald, with a shield: **расшифровка готова, пока ничего не отправлено** and the count of what was hidden.
+- The complete masked text, in the entity chips, inside a scrollable `26rem` well — the whole point is that it is the *entire* outgoing text, not a sample. Past 3000 characters it opens truncated with «Показать целиком».
+- The focus as three radio rows (`min-h-11`, filled circle when chosen), the extra requirement if one is set, then the pre-flight cost: tokens, the number of requests when the recording is long enough to be split, and the money.
+- One primary action («Составить выжимку») and one text escape («Оставить только расшифровку») — a transcript with no summary is a legitimate outcome, not a failure.
+
+The cost line is deliberately placed under the focus rather than in the header: what is being paid for is this particular summary, so the number belongs to the choice.
+
+### Re-running the summary
+Under a finished summary, «Составить заново» opens a bordered panel stating in the first line that the transcript is not recomputed, then the same focus radios and the same estimate. The point of that line is that without it, a second summary reads as a second full run and the cost beside the button looks like it covers both. After the call the document replaces the estimate with the exact figure from the provider's token counts.
+
+### Transcript search
+Search sits above the transcript, not in the history rail, because the history rail filters recordings and this filters one. Matches are amber; the current one gets an outline so it stays findable in a transcript several screens long. A `N из M` counter and ↑/↓ step buttons; Enter and Shift+Enter work from anywhere on the page. Typing a query lifts the long-transcript cap on its own — a search that reported hits below the fold would be lying. Capped at 2000 hits, with a note to narrow the query, because a one-letter query in an hour of speech would otherwise paint tens of thousands of spans.
+
+Entity chips and search hits can overlap — someone looking for a name is searching for text the app also marks as personal data. The renderer cuts the text at every boundary both introduce and labels each run, so neither wins and the chip is never lost.
 
 ### Model reply
 The protocol arrives from the model as Markdown. It is rendered, not dumped: `#`/`**bold**` lines become section subheadings, `- ` runs become bullet lists, `1.` runs become numbered lists, `| … |` + `|---|` becomes a real table, `> ` a quote, ```` ``` ```` a code block, `---` a hairline, and inline `**`/`*`/`` ` ``/`[..](..)` become strong/em/code/link. The raw Markdown markers never reach the page. The renderer is hand-rolled — a bounded GFM subset, no dependency — so the protocol keeps the document's own type instead of a library's defaults.
 
 ### Section
-A hairline above, a mono uppercase label, an optional right-aligned meta (token count, "Скопировать"), then the content. This replaces the card.
+A hairline above, a mono uppercase label, an optional right-aligned meta, then the content. This replaces the card.
+
+The meta slot is for **section-scoped controls only** — "Скопировать", "Показать целиком". A mono uppercase label with a 45-character figure beside it reads as noise, and every purpose that lands here multiplies that noise by the number of sections. Facts about the *call* (cost, token counts) belong with the control that would spend again, which is the «Составить заново» line; facts about the *text* belong in the text.
+
+### Say It Once
+The privacy promise appeared four times — empty state, review band, document placeholder, export header — and by the third it was decoration. Each claim now has one home, chosen by when it becomes true: the empty state says what happens next, the review band says what was hidden and where to read it, the document shows the masked copy instead of describing it.
+
+Numbers follow the same rule. The review screen used to print "5 личных данных" in the meta line and "Скрыто 5 значений" fifty pixels below; the meta line now carries what the band does not — duration and speaker count, in mono, because the pipeline produced them.
+
+### Space Before Weight
+`Скачать .txt`, `Печать / PDF` and `Обработать ещё` were three identical ghost buttons in one row, which made the one button worth pressing look like the two nobody presses. The exports stay adjacent; the loop moves to the far edge as a text button. Separating by space costs nothing and the quiet world does not need another colour to say "primary".
 
 ### Entity chips (signature)
 Mono, `0.8125rem`, `4px` radius, 1px border, saturated background with tone-on-tone text (see the palette). Stateless inline markers inside the running text.
@@ -168,11 +196,11 @@ A thin `h-1.5` `bg-slate-200` track filled with the accent; a message on the lef
 ### Drop target
 One large dashed zone, centred, doubled as the onboarding panel (see Onboarding). The old empty-state card is gone — there is exactly one dashed target, and it explains the product instead of only inviting a drop.
 
-### Settings strip
-A slate band under the header: the model field, the OpenRouter key status (emerald / amber by state), and a one-line note that the key lives in `.env`.
-
 ### History index
-A plain list, not cards: a bordered `Поиск` field above it, each row the file name plus a mono `date · N ПДн`; the active row is blue on slate-100. On hover a `✎` renames the row in place (the name becomes an input; Enter commits, Escape cancels) and a `×` deletes it. An unmatched search reads «Ничего не найдено».
+A plain list, not cards: a bordered `Поиск` field above it, each row the file name plus a mono line reading `выжимка · N персональных данных` (or `без выжимки`, which answers "does this one have the answer or only the text" before it is opened); the active row is blue on slate-100. On hover a `✎` renames the row in place (the name becomes an input; Enter commits, Escape cancels) and a trash icon deletes it — in two steps, because a removed transcript cannot be brought back. An unmatched search reads «Ничего не нашлось».
+
+### Settings panel
+Settings live in the left rail, behind a single row that reads «Настройки» — not a strip under the header, which was specified once and never built. It opens as a view in place of the document (`К записям` goes back), so settings never float over the transcript they describe.
 
 ### Print
 `Печать / PDF` drops all chrome — app bar, history, action rows, copy buttons (`no-print`) — and prints the document on `18mm` page margins. Export needs no extra dependency: the browser's own PDF printer is the exporter.
