@@ -5,7 +5,7 @@
 #   ./desktop/build.sh --mac    # force macOS targets (must run on a Mac)
 #   ./desktop/build.sh --linux  # force Linux targets
 #
-# Models ARE bundled into the app (~0.9 GB), so it is self-contained and
+# Models ARE bundled into the app (~0.7 GB), so it is self-contained and
 # relocatable. They must therefore be present at build time — see the check in
 # preflight and download_models.sh.
 set -euo pipefail
@@ -139,7 +139,30 @@ mkdir -p "$BUILD_TMPDIR"
 export TMPDIR="$BUILD_TMPDIR"
 [ -d node_modules ] || npm install --no-audit --no-fund
 if [ "$TARGET" = mac ]; then
+  # Do not let electron-builder pick up whatever certificate happens to sit in the
+  # keychain: osx-sign then walks the whole 1.4 GB bundle (the ONNX models are
+  # hundreds of MB each) and dies with "RangeError: Invalid array length" inside
+  # isbinaryfile, leaving a half-signed .app behind. Signing is not part of this
+  # build -- notarization needs a Developer ID and Apple network access, see
+  # DESKTOP.md. An explicit CSC_LINK still wins if someone does want to sign.
+  export CSC_IDENTITY_AUTO_DISCOVERY=false
   npx electron-builder --mac dmg zip --arm64
+
+  say "подпись приложения (ad-hoc)"
+  # Skipping signing entirely is not enough: Apple Silicon refuses to execute an
+  # unsigned bundle. Signing ad-hoc is what a local build needs, and it also
+  # replaces any stale signature left by an earlier interrupted run.
+  APP_DIR="$ROOT/desktop/release/mac-arm64/sttshka.app"
+  [ -d "$APP_DIR" ] || fail "electron-builder не собрал $APP_DIR"
+  codesign --remove-signature "$APP_DIR" 2>/dev/null || true
+  find "$APP_DIR" -name "._*" -delete 2>/dev/null || true
+  codesign --force --deep --sign - "$APP_DIR" \
+    || fail "не удалось подписать приложение ad-hoc"
+  # Never trust the build's exit status alone here: a bundle can carry a stale or
+  # partial signature and still "succeed". Verify it independently.
+  codesign --verify --deep --strict "$APP_DIR" \
+    || fail "подпись приложения не проходит проверку"
+  echo "подпись ad-hoc на месте и проходит проверку"
 else
   npx electron-builder --linux AppImage deb
 fi

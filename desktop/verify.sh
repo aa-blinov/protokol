@@ -21,9 +21,30 @@ section() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
 section "Платформа"
 OS="$(uname -s)"
 ARCH="$(uname -m)"
+
+# Where the build actually lands. electron-builder names the bundle after the
+# package name (sttshka.app) and puts it in an arch folder; the "Протокол.app"
+# name only appears inside the .dmg, once a person drags it out. Checking
+# release/Протокол.app -- which is what this script used to do -- therefore
+# never found anything, and every check below it reported FAIL against a
+# perfectly good build.
+resolve_macos_app() {
+  for candidate in \
+    "$ROOT/desktop/release/mac-arm64/sttshka.app" \
+    "$ROOT/desktop/release/mac-arm64/$APP_NAME.app" \
+    "$ROOT/desktop/release/$APP_NAME.app" \
+    "/Applications/$APP_NAME.app"; do
+    if [ -d "$candidate" ]; then printf '%s' "$candidate"; return 0; fi
+  done
+  # Last resort: whatever the newest .app in the release tree is.
+  local found
+  found="$(find "$ROOT/desktop/release" -maxdepth 2 -name '*.app' -type d 2>/dev/null | head -1)"
+  [ -n "$found" ] && printf '%s' "$found"
+}
+
 if [ "$OS" = "Darwin" ]; then
   ok "macOS $(sw_vers -productVersion 2>/dev/null)"
-  APP_DIR="${APP_DIR:-$ROOT/desktop/release/$APP_NAME.app}"
+  APP_DIR="${APP_DIR:-$(resolve_macos_app)}"
   RESOURCES="$APP_DIR/Contents/Resources"
   # Models ship inside the bundle now, so the app's own Resources is the default.
   MODELS_DIR="${MODELS_DIR:-$RESOURCES/models}"
@@ -129,16 +150,31 @@ else
   bad "маскирование не сработало: $MASK"
 fi
 
-# The rule layer covers the structured identifiers the model misses (IP, INN,
-# SNILS, card). Check them by their tokens so a regression is caught here.
+# The rule layer is applied through fill_gaps: it only contributes where the NER
+# model left a hole. Check the identifiers that the model handles worst on
+# dictated text, which is exactly where the rules have to take over.
 STRUCT="$(curl -sS -m 120 -X POST -H 'Content-Type: application/json' \
-  -d '{"text":"ИНН 7707083893, СНИЛС 123-456-789 64, IP 192.168.0.1, карта 4111 1111 1111 1111."}' \
+  -d '{"text":"ИНН 100000000074, карта 4276380012345679, СНИЛС 112-334-556 78, IP 192.168.0.1, серия 4508 номер 123456."}' \
   "http://127.0.0.1:$PORT/api/mask" 2>/dev/null)"
-if printf '%s' "$STRUCT" | grep -q '\[INN_1\]' && printf '%s' "$STRUCT" | grep -q '\[SNILS_1\]' \
-  && printf '%s' "$STRUCT" | grep -q '\[IP_1\]' && printf '%s' "$STRUCT" | grep -q '\[CARD_1\]'; then
-  ok "правила ловят структурные ПДн: ИНН, СНИЛС, IP, карта"
+# Only masked_text is checked for leftovers. entity_map is supposed to hold the
+# originals -- that is what makes the unmasking step work -- so grepping the
+# whole response flagged every identifier that masking had correctly replaced.
+MASKED="$(printf '%s' "$STRUCT" | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin).get("masked_text",""))' 2>/dev/null)"
+LEAKED="$(printf '%s' "$MASKED" | /usr/bin/python3 -c '
+import re, sys
+text = sys.stdin.read()
+wanted = ["100000000074", "4276380012345679", "112-334-556", "192.168.0.1", "4508", "123456"]
+print(",".join(v for v in wanted if v in text))' 2>/dev/null)"
+MISSING=""
+for token in INN CARD SNILS IP PASSPORT; do
+  case "$MASKED" in *"[$token"*) ;; *) MISSING="$MISSING $token" ;; esac
+done
+if [ -z "$LEAKED" ] && [ -z "$MISSING" ]; then
+  ok "ИНН, карта, СНИЛС, IP и паспорт замаскированы полностью"
 else
-  bad "правила не сработали: $STRUCT"
+  [ -n "$MISSING" ] && bad "не замаскированы:$MISSING"
+  [ -n "$LEAKED" ] && bad "в замаскированном тексте остались:$LEAKED"
+  note "маскированный текст: $MASKED"
 fi
 
 HEALTH2="$(curl -sS -m 10 "http://127.0.0.1:$PORT/api/health" 2>/dev/null)"
