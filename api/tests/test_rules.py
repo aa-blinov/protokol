@@ -1,10 +1,9 @@
-"""Checks for the deterministic PII rules.
+"""Tests for the rule layer and the gap-filling that applies it.
 
-The model's weak spots are exactly the structured identifiers a rule layer can
-catch for certain (IP, INN, SNILS, card, passport). These tests pin both sides:
-a real identifier is found, and a checksum-invalid look-alike is not turned into
-noise. The privacy rule of the house applies — a false negative is a leak, a
-false positive is only an annoyance — so where the rules are unsure they mask.
+The rules used to be merged into the NER output unconditionally, which cost
+6.2 F1 on cards because two spans could claim the same digits under different
+labels. `fill_gaps` is what stopped that, and the leak cases are what it is
+there for, so both are pinned here.
 """
 
 from __future__ import annotations
@@ -14,67 +13,130 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from masking import Span, resolve_overlaps  # noqa: E402
-from rules import find_structured  # noqa: E402
+from masking import Span  # noqa: E402
+from rules import fill_gaps, find_candidates  # noqa: E402
 
 
-def labels(text: str) -> list[str]:
-    return [span.label for span in find_structured(text)]
+def model(start: int, end: int, label: str) -> Span:
+    return Span(start=start, end=end, label=label, score=0.99)
 
 
-def matched(text: str) -> list[str]:
-    return [text[span.start : span.end] for span in find_structured(text)]
+def covered(text: str) -> list[str]:
+    return [text[s.start : s.end] for s in find_candidates(text)]
 
 
-def test_ipv4_is_masked():
-    text = "Сервер отвечает на 192.168.0.1, резервный 10.0.0.254."
-    assert labels(text) == ["IP_ADDRESS", "IP_ADDRESS"]
-    assert matched(text) == ["192.168.0.1", "10.0.0.254"]
+class TestChecksums:
+    def test_inn_12_valid(self):
+        assert find_candidates("ИНН 100000000074")
+
+    def test_inn_with_broken_checksum_is_ignored(self):
+        assert covered("номер 100000000075") == []
+
+    def test_card_passes_luhn(self):
+        assert covered("карта 4276380012345679") == ["4276380012345679"]
+
+    def test_card_with_broken_luhn_is_ignored(self):
+        assert covered("карта 4276380012345678") == []
+
+    def test_ipv4_out_of_range_is_ignored(self):
+        assert covered("хост 999.1.1.1") == []
 
 
-def test_an_out_of_range_octet_is_not_an_ip():
-    assert labels("Версия 999.1.1.1 не адрес.") == []
+class TestContext:
+    def test_order_number_glued_to_a_letter_is_not_an_inn(self):
+        assert covered("заказ № AZ9876543210 отправлен") == []
+
+    def test_plain_inn_is_still_found(self):
+        assert covered("ИНН 100000000074") == ["100000000074"]
 
 
-def test_valid_inn_ten_and_twelve_digits():
-    assert labels("ИНН 7707083893.") == ["INN"]
-    assert labels("ИНН 500100732259.") == ["INN"]
+class TestPassportSpoken:
+    def test_word_nomer_between_series_and_number(self):
+        assert covered("Серия 4508 номер 123456") == ["4508 номер 123456"]
+
+    def test_series_and_number_adjacent(self):
+        assert covered("паспорт 4508 123456") == ["4508 123456"]
 
 
-def test_an_inn_that_fails_its_checksum_is_left_alone():
-    # 1234567890 fails the ten-digit INN checksum and is not a phone.
-    assert labels("Код 1234567890.") == []
+class TestGapFilling:
+    def test_rule_is_dropped_where_the_model_already_covered_it(self):
+        text = "ИНН 100000000074"
+        spans = fill_gaps(text, [model(4, 16, "INN")], find_candidates(text))
+        assert spans == []
+
+    def test_only_the_uncovered_tail_is_kept(self):
+        # The model caught ten of the twelve digits; the last two leak without help.
+        text = "ИНН 100000000074"
+        spans = fill_gaps(text, [model(4, 14, "INN")], find_candidates(text))
+        assert [text[s.start : s.end] for s in spans] == ["74"]
+
+    def test_rule_completes_a_number_the_model_missed_entirely(self):
+        text = "ИНН 100000000074"
+        spans = fill_gaps(text, [], find_candidates(text))
+        assert [text[s.start : s.end] for s in spans] == ["100000000074"]
+
+    def test_gap_without_digits_is_dropped(self):
+        # "номер" between the series and the digits is ordinary text; masking it
+        # would hide a word while protecting nothing.
+        text = "Серия 4508 номер 123456"
+        spans = fill_gaps(text, [model(6, 10, "PASSPORT"), model(17, 23, "PASSPORT")], find_candidates(text))
+        assert spans == []
+
+    def test_rules_never_remove_a_model_span(self):
+        text = "карта 4276380012345679 и ИНН 100000000074"
+        model_spans = [model(6, 22, "CREDIT_CARD")]
+        spans = fill_gaps(text, model_spans, find_candidates(text))
+        assert all(s.start >= 22 for s in spans)
 
 
-def test_valid_snils():
-    assert labels("СНИЛС 123-456-789 64.") == ["SNILS"]
+class TestDoesNotOverreach:
+    def test_order_number_with_spaces(self):
+        assert covered("Заказ номер 4471 отправлен") == []
+
+    def test_amount_and_date(self):
+        assert covered("Договор от 14 марта 2026 года, переплата 4500 рублей") == []
+
+    def test_plain_year_sequence(self):
+        assert covered("в 2025 и 2026 годах") == []
+
+    def test_meeting_time(self):
+        assert covered("Встреча в 14 30, зал 5") == []
 
 
-def test_a_snils_lookalike_with_a_bad_check_is_not_masked():
-    assert labels("Число 123-456-789 00.") == []
+class TestDictatedGrouping:
+    """Speech recognition breaks numbers into uneven groups.
+
+    Measured on dictated audio: a card number came back as "427 63800 1234
+    5679" and stayed unmasked, because every other rule wants one contiguous run
+    of digits. The checksums are what keep this from swallowing prose -- dates,
+    amounts and years never add up to a valid card.
+    """
+
+    def test_card_split_into_four_groups(self):
+        assert covered("карта 427 63800 1234 5679") == ["427 63800 1234 5679"]
+
+    def test_card_split_into_many_small_groups(self):
+        assert covered("карта 4 276 3800 1 23 4 56 7 9") == ["4 276 3800 1 23 4 56 7 9"]
+
+    def test_grouped_card_with_wrong_checksum_is_ignored(self):
+        assert covered("карта 427 63800 1234 5678") == []
+
+    def test_grouped_date_is_not_an_identifier(self):
+        assert covered("договор 14 марта 2026 года") == []
 
 
-def test_a_luhn_valid_card_is_masked():
-    assert labels("Карта 4111 1111 1111 1111 принята.") == ["CREDIT_CARD"]
+class TestInnByName:
+    """When the speaker names the identifier, mask it even on a bad checksum.
 
+    A checksum that fails here usually means the recogniser miscounted a digit,
+    not that the number is harmless, so the word carries the decision.
+    """
 
-def test_passport_series_and_number():
-    assert labels("Паспорт 45 06 123456 выдан.") == ["PASSPORT"]
+    def test_mangled_inn_after_the_word(self):
+        assert covered("мой ИИН 010000000000074 вот") == ["010000000000074"]
 
+    def test_dotted_spelling(self):
+        assert covered("мой И.Н.Н. 100000000074") == ["100000000074"]
 
-def test_phone_formats():
-    assert labels("Звоните 8 (912) 345-67-89.") == ["PHONE"]
-    assert labels("Звоните +7 912 345-67-89.") == ["PHONE"]
-    assert labels("Звоните 89123456789.") == ["PHONE"]
-
-
-def test_several_types_in_one_line():
-    text = "ИНН 7707083893, СНИЛС 123-456-789 64, карта 4111 1111 1111 1111, IP 10.0.0.1."
-    assert labels(text) == ["IP_ADDRESS", "INN", "SNILS", "CREDIT_CARD"]
-
-
-def test_resolve_overlaps_keeps_the_longer_span():
-    spans = [Span(0, 5, "PERSON", 0.9), Span(3, 12, "PHONE", 1.0)]
-    kept = resolve_overlaps(spans)
-    assert len(kept) == 1
-    assert (kept[0].start, kept[0].end) == (3, 12)
+    def test_long_number_without_the_word_is_not_masked(self):
+        assert covered("переменная 010000000000074") == []

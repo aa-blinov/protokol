@@ -46,7 +46,6 @@ MODEL_NAME = "gigaam-v3-e2e-ctc"
 # disk vs 845 MB) and the bundle shrinks with it. On a 16 GB laptop that matters.
 QUANTIZATION = "int8"
 TARGET_SAMPLE_RATE = 16_000
-MAX_AUDIO_SECONDS = 60 * 60  # one hour; a meeting, not a call centre
 
 # The model's own ceiling is ~200 s (see the module docstring); 120 s keeps a
 # wide margin and still gives each chunk plenty of context.
@@ -77,11 +76,15 @@ class Stt:
         self._timestamps = self.model.with_timestamps()
 
     def transcribe(self, audio: bytes, suffix: str = ".wav") -> tuple[str, float]:
-        """Return ``(text, duration_seconds)`` for raw audio bytes."""
+        """Return ``(text, duration_seconds)`` for raw audio bytes.
+
+        No cap on length: the previous one-hour limit was a product decision, not
+        a property of the models. What bounds a request now is memory -- the
+        upload is read whole and decoded whole before anything is checked, so a
+        long recording is accepted and paid for in RAM.
+        """
         samples = self._decode(audio)
         duration = len(samples) / TARGET_SAMPLE_RATE
-        if duration > MAX_AUDIO_SECONDS:
-            raise ValueError(f"Audio is {duration:.0f}s, limit is {MAX_AUDIO_SECONDS}s")
         return self.transcribe_samples(samples), duration
 
     @staticmethod

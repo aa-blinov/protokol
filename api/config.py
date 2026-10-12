@@ -51,11 +51,17 @@ DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL", "deepseek/deepseek-v4.1-flash")
 # Inference threads. Kept modest so the app stays responsive while a model runs.
 INFERENCE_THREADS = int(os.getenv("INFERENCE_THREADS", "4"))
 
-# Apple Silicon has a CoreML execution provider in onnxruntime, which is the
-# whole reason to run natively instead of under Docker/rosetta. Disable with
-# USE_COREML=0 if it ever misbehaves: the CPU path is the tested baseline.
+# Apple Silicon has a CoreML execution provider in onnxruntime. Measured on an
+# M4 Pro and checked with onnxruntime's own
+# tools.check_onnx_model_mobile_usability: all three of our models come back
+# "not recommended". Our graphs split into 4-244 CoreML subgraphs, and the
+# CPU<->CoreML crossings cost more than the accelerated ops gain -- diarization
+# ran 11% slower with 13% more CPU time and 33% more RSS than plain CPU. ONNX
+# Runtime's own deployment guide says to start from the CPU EP for a quantized
+# model, which is exactly what gigaam int8 is. Kept behind a switch because
+# CoreML does win on some models (fixed-shape CNNs); it just does not on these.
 IS_MAC_ARM = platform.system() == "Darwin" and platform.machine() == "arm64"
-USE_COREML = os.getenv("USE_COREML", "1" if IS_MAC_ARM else "0") == "1"
+USE_COREML = os.getenv("USE_COREML", "0") == "1"
 
 
 def ort_providers() -> list[str]:

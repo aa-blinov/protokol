@@ -8,9 +8,8 @@ no benefit in a single-user tool.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
-
 from llm import DEFAULT_MODEL
+from pydantic import BaseModel, Field
 
 
 class Entity(BaseModel):
@@ -86,3 +85,125 @@ class ProcessProgress(BaseModel):
     pct: int = Field(ge=0, le=100)
     message: str = ""
     result: ProcessResult | None = None
+
+
+class SettingsState(BaseModel):
+    """What the settings dialog needs to render itself.
+
+    ``key_hint`` is a masked prefix/suffix, never the key itself -- the browser
+    gets enough to say "sk-or-v1-…3709a" and nothing more.
+    """
+
+    has_key: bool = Field(description="Whether a key is currently set")
+    key_hint: str = Field(description="Masked key for display, e.g. sk-or-v1-…3709a")
+    model: str = Field(description="Selected chat model id")
+    base_url: str = Field(description="OpenAI-compatible API base URL; OpenRouter by default")
+    key_page: str = Field(description="Where to obtain a key")
+    models_page: str = Field(description="OpenRouter model catalogue")
+    preset: str = Field(default="decisions", description="What to pull out of the recording")
+    extra: str = Field(default="", description="Extra requirement appended to the prompt")
+    presets: list[dict] = Field(default_factory=list, description="Available presets with labels")
+
+
+class SettingsUpdate(BaseModel):
+    """Save the key and/or the model. An empty ``key`` keeps the stored one."""
+
+    key: str = Field(default="", description="New API key; empty means keep the current one")
+    base_url: str = Field(default="", description="New API address; empty means keep the current one")
+    model: str = Field(default="", description="New model id; empty means keep the current one")
+    verify: bool = Field(default=True, description="Check the key against that address before saving")
+    preset: str = Field(default="", description="Preset key; empty means keep the current one")
+    extra: str | None = Field(default=None, description="Extra requirement; null means keep, empty string clears")
+
+
+class SettingsResult(BaseModel):
+    ok: bool
+    detail: str = ""
+    settings: SettingsState
+
+
+class KeyCheck(BaseModel):
+    key: str
+    base_url: str = Field(default="", description="Address to check against; empty means the current one")
+    remember: bool = Field(default=False, description="Save the key when it turns out to work")
+
+
+class KeyCheckResult(BaseModel):
+    ok: bool
+    detail: str = ""
+    settings: SettingsState | None = None
+
+
+class ModelInfo(BaseModel):
+    id: str
+    name: str
+    context: int | None = None
+    prompt_price: float | None = Field(default=None, description="USD per million prompt tokens")
+    completion_price: float | None = Field(default=None, description="USD per million completion tokens")
+
+
+class AnalysisResult(BaseModel):
+    """Audio turned into text, speakers and masks -- but no summary yet."""
+
+    cache_key: str
+    transcript: str
+    masked_text: str
+    entity_map: dict[str, str]
+    entities: list[Entity]
+    segments: list[SpeakerSegment] = Field(default_factory=list)
+    duration_sec: float
+    timings: dict[str, float] = Field(default_factory=dict)
+    cached: bool = Field(default=False, description="True when the transcript was reused from a previous run")
+
+
+class AnalysisProgress(BaseModel):
+    """One line of the ``/api/analyse`` NDJSON stream.
+
+    Same shape as ``ProcessProgress`` so the browser can share one reader, but
+    without an ``llm`` stage: this half of the pipeline never calls a model.
+    """
+
+    stage: str = Field(description="transcribe | diarize | mask | done | error")
+    pct: int = Field(ge=0, le=100)
+    message: str = ""
+    result: AnalysisResult | None = None
+
+
+class SummarizeRequest(BaseModel):
+    cache_key: str
+    model: str = DEFAULT_MODEL
+    preset: str = ""
+    extra: str | None = None
+    # Fallback for a recording whose cache entry has been evicted. The masked
+    # text already lives in the session file on this machine, so re-running a
+    # summary should never depend on a bounded cache still holding it.
+    masked_text: str = ""
+
+
+class SummarizeResult(BaseModel):
+    reply: str
+    reply_unmasked: str
+    llm_model: str
+    preset: str = Field(default="", description="Which focus was applied, echoed back for the UI")
+    tokens_in: int | None = None
+    tokens_out: int | None = None
+    cost: dict[str, float | None] = Field(default_factory=dict)
+    timings: dict[str, float] = Field(default_factory=dict)
+
+
+class EstimateRequest(BaseModel):
+    chars: int = Field(description="Length of the text that would be sent, in characters")
+    model: str = DEFAULT_MODEL
+
+
+class EstimateResult(BaseModel):
+    """Pre-flight figures for one summary. All money fields are null when the
+    provider quotes no fixed price for the model, rather than rounded to zero."""
+
+    tokens_in: int
+    tokens_out: int
+    requests: int = Field(description="How many provider requests this summary takes")
+    input: float | None = Field(default=None, description="USD for the incoming text")
+    output: float | None = Field(default=None, description="USD for the reply")
+    total: float | None = None
+    currency: str = "USD"

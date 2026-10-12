@@ -128,6 +128,25 @@ def test_unmask_does_not_corrupt_longer_tokens():
     entity_map = {"PERSON_1": "Иван", "PERSON_12": "Пётр"}
     assert unmask("[PERSON_12]", entity_map) == "Пётр"
     assert unmask("[PERSON_1]", entity_map) == "Иван"
+    # Both in one string, in both orders: the shorter token must not win first.
+    assert unmask("[PERSON_1] и [PERSON_12]", entity_map) == "Иван и Пётр"
+    assert unmask("[PERSON_12] потом [PERSON_1]", entity_map) == "Пётр потом Иван"
+
+
+def test_unmask_needs_a_word_boundary():
+    """A token glued to letters is part of some other word, not a placeholder."""
+    entity_map = {"PERSON_1": "Иван"}
+    assert unmask("XPERSON_1X", entity_map) == "XPERSON_1X"
+
+
+def test_unknown_token_is_left_alone():
+    """A token with no entry cannot be substituted and must stay visible.
+
+    Silently dropping it would hide the fact that the model mentioned a value
+    the mask never saw.
+    """
+    entity_map = {"PERSON_1": "Иван"}
+    assert unmask("[PERSON_9] и [PERSON_1]", entity_map) == "[PERSON_9] и Иван"
 
 
 def test_empty_input_is_unchanged():

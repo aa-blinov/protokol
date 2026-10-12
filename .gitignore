@@ -12,3 +12,27 @@ models/rubert-pii/
 models/diarization/
 .playwright-mcp/
 tsconfig.tsbuildinfo
+
+# Downloaded benchmark corpora. All of it is public domain or CC0 and can be
+# fetched again: LibriVox from archive.org, FLEURS from Hugging Face.
+benchmarks/corpus/*.npy
+benchmarks/corpus/librivox/
+benchmarks/corpus/fleurs/
+benchmarks/corpus/pii_bench/
+benchmarks/corpus/ner_models/
+
+# Finder's per-directory metadata. Three copies of it were sitting untracked in
+# the status output, which is noise in every diff review.
+.DS_Store
+
+# Screenshots written by the CDP helpers in benchmarks/.
+
+# History of processed recordings. It holds real transcripts and the personal
+# data the app masks out of them, so it must never be committed -- the live copy
+# lives beside the settings file, and this one is a leftover from before the
+# history moved out of localStorage.
+sessions.json
+
+# Tool scratch: canvas assets and critique snapshots are per-run, not source.
+.mavis/
+.impeccable/
