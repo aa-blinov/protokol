@@ -270,6 +270,12 @@ body {
 .dark .text-slate-400 { color: #7c8aa0; }
 .dark .text-slate-300 { color: #64748b; }
 .dark .text-blue-700 { color: var(--accent-ink); }
+/* Each of these is paired with a tinted background that IS overridden above.
+   A missing text override is the one half of the pair that fails silently:
+   the surface darkens, the ink does not, and the result is dark-on-dark.
+   `text-blue-900` on `bg-blue-50` shipped exactly that way. */
+.dark .text-blue-900 { color: #dbeafe; }
+.dark .text-blue-800 { color: #bfdbfe; }
 .dark .text-emerald-700 { color: #6ee7b7; }
 .dark .text-amber-700 { color: #fcd34d; }
 .dark .text-amber-800 { color: #fde68a; }

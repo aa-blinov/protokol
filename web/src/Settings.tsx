@@ -20,6 +20,7 @@ import {
   type SettingsState,
 } from "./api";
 import { Button, Section } from "./ui";
+import { PresetPicker } from "./SummaryControls";
 import { Eye, EyeOff, Search } from "lucide-react";
 
 function formatPrice(value: number | null): string {
@@ -340,25 +341,10 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
       </Section>
 
       <Section label="Как собирать выжимку">
-        <div className="grid gap-2">
-          {(state?.presets ?? []).map((option) => (
-            <label
-              key={option.key}
-              className={`flex cursor-pointer items-center gap-2.5 rounded border px-3 py-2 text-sm ${
-                preset === option.key ? "border-blue-600 bg-blue-50 text-blue-900" : "border-slate-200 text-slate-700"
-              }`}
-            >
-              <input
-                type="radio"
-                name="preset"
-                checked={preset === option.key}
-                onChange={() => setPreset(option.key)}
-                className="accent-blue-700"
-              />
-              {option.label}
-            </label>
-          ))}
-        </div>
+        {/* Один селектор на всё приложение. Здесь жил второй, написанный
+            отдельно, и именно он остался без тёмного переопределения текста:
+            выбранный режим в тёмной теме читался как тёмное по тёмному. */}
+        <PresetPicker presets={state?.presets ?? []} value={preset} onChange={setPreset} name="settings-preset" />
         {/* Always available, and tall enough for a real prompt: picking a preset
             and adding to it are the same action, so there is no "Своё" option. */}
         <textarea
@@ -367,7 +353,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
           rows={3}
           placeholder="Свои требования, если нужно что-то ещё: например «выдели только договорённости по деньгам и срокам»"
           aria-label="Свои требования к выжимке"
-          className="focus-ring mt-2 w-full resize-y rounded border border-slate-300 px-3 py-2 text-sm"
+          className="focus-ring mt-3 w-full resize-y rounded border border-slate-300 px-3 py-2 text-sm"
         />
         <p className="mt-2 text-xs text-slate-600">
           Инструкции о персональных данных остаются в силе при любом выборе.

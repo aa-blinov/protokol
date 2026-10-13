@@ -7,7 +7,6 @@
 
 import { useEffect, useState } from "react";
 import { estimateCost, type EstimateResult, type SettingsState } from "./api";
-import { Circle, CircleDot } from "lucide-react";
 
 /** Duration the way a person says it: "4 мин 07 с", "1 ч 12 мин", "47 с".
  *  Raw seconds with a decimal ("4523.4 с") is machine output, not a reading. */
@@ -87,37 +86,37 @@ export function PresetPicker({
   value,
   onChange,
   disabled = false,
+  name = "preset",
 }: {
   presets: SettingsState["presets"];
   value: string;
   onChange: (preset: string) => void;
   disabled?: boolean;
+  /** Shared `name` keeps the native radio group intact: arrow keys move within
+   *  it, which a row of `role="radio"` buttons does not give you. */
+  name?: string;
 }) {
   return (
     <div role="radiogroup" aria-label="Что выбрать из разговора" className="grid gap-2">
       {presets.map((preset) => {
         const active = preset.key === value;
         return (
-          <button
+          <label
             key={preset.key}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            disabled={disabled}
-            onClick={() => onChange(preset.key)}
-            className={`focus-ring flex min-h-11 items-center gap-3 rounded border px-3 py-2 text-left text-sm transition-colors disabled:opacity-60 ${
-              active
-                ? "border-blue-700 bg-blue-50 text-slate-900"
-                : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
+            className={`flex min-h-11 cursor-pointer items-center gap-2.5 rounded border px-3 py-2 text-sm transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--ring)] ${
+              active ? "border-blue-700 bg-blue-50 text-slate-900" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+            } ${disabled ? "pointer-events-none opacity-60" : ""}`}
           >
-            {active ? (
-              <CircleDot aria-hidden className="h-4 w-4 shrink-0 text-blue-700" />
-            ) : (
-              <Circle aria-hidden className="h-4 w-4 shrink-0 text-slate-400" />
-            )}
+            <input
+              type="radio"
+              name={name}
+              checked={active}
+              disabled={disabled}
+              onChange={() => onChange(preset.key)}
+              className="h-4 w-4 shrink-0 accent-blue-700"
+            />
             <span className="min-w-0">{preset.label}</span>
-          </button>
+          </label>
         );
       })}
     </div>
