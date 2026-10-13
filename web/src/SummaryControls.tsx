@@ -80,6 +80,8 @@ export function useEstimate(chars: number, model: string): EstimateResult | null
   return estimate;
 }
 
+export type EstimateResultLike = EstimateResult | null;
+
 export function PresetPicker({
   presets,
   value,

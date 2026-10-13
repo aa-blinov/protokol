@@ -5,7 +5,6 @@ import {
   summarize,
   type AnalysisResult,
   type AnalysisProgress,
-  type EstimateResult,
   type Session,
   type SettingsState,
   type SummarizeResult,
@@ -15,16 +14,10 @@ import {
 import { chipClass, MaskedView } from "./Highlight";
 import { Review } from "./Review";
 import { Toasts, type Notice } from "./Toast";
+import { ComposeGate } from "./ComposeGate";
 import { SettingsPanel } from "./Settings";
 import { Transcript } from "./Transcript";
-import {
-  ActualCostLine,
-  EstimateLine,
-  humanDuration,
-  pluralRu,
-  PresetPicker,
-  useEstimate,
-} from "./SummaryControls";
+import { ActualCostLine, humanDuration, pluralRu, useEstimate } from "./SummaryControls";
 import { Button, CopyButton, Markdown, ProgressBar, Section } from "./ui";
 import {
   ArrowLeft,
@@ -116,7 +109,7 @@ function Document({
   preset,
   onPreset,
   onResummarise,
-  onReview,
+  onOpenSettings,
   busy,
   onAnother,
 }: {
@@ -125,7 +118,7 @@ function Document({
   preset: string;
   onPreset: (preset: string) => void;
   onResummarise: () => void;
-  onReview: () => void;
+  onOpenSettings: () => void;
   busy: boolean;
   onAnother: () => void;
 }) {
@@ -152,6 +145,9 @@ function Document({
             settings screen, and "deepseek/deepseek-v4.1-flash" means nothing to
             whoever opens the document. */}
         <p className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-slate-500">
+          <span className={summary ? "text-emerald-700" : "text-slate-500"}>
+            {summary ? "С выжимкой" : "Только расшифровка"}
+          </span>
           <time dateTime={session.createdAt} className="tabular-nums">
             {new Date(session.createdAt).toLocaleString("ru-RU", {
               dateStyle: "short",
@@ -209,7 +205,7 @@ function Document({
                 className="focus-ring flex items-center gap-1.5 rounded text-xs text-blue-700 underline"
               >
                 <RefreshCw aria-hidden className="h-3.5 w-3.5" />
-                Составить заново
+                Изменить выжимку
                 <ChevronDown
                   aria-hidden
                   className={`h-3.5 w-3.5 transition-transform ${redoOpen ? "rotate-180" : ""}`}
@@ -220,14 +216,18 @@ function Document({
                   competed with the heading for the same band. */}
               <ActualCostLine cost={summary.cost} tokensIn={summary.tokens_in} tokensOut={summary.tokens_out} />
               {redoOpen ? (
-                <RedoPanel
+                <ComposeGate
                   settings={settings}
                   preset={preset}
                   onPreset={onPreset}
                   estimate={estimate}
                   busy={busy}
                   canRun={canResummarise}
+                  runLabel="Составить выжимку"
                   onRun={onResummarise}
+                  onOpenSettings={onOpenSettings}
+                  onClose={() => setRedoOpen(false)}
+                  closeLabel="Оставить как есть"
                 />
               ) : null}
             </div>
@@ -240,17 +240,33 @@ function Document({
               </div>
             </details>
           </>
+        ) : redoOpen ? (
+          <ComposeGate
+            settings={settings}
+            preset={preset}
+            onPreset={onPreset}
+            estimate={estimate}
+            busy={busy}
+            canRun={canResummarise}
+            runLabel="Составить выжимку"
+            onRun={onResummarise}
+            onOpenSettings={onOpenSettings}
+            onClose={() => setRedoOpen(false)}
+            closeLabel="Оставить только расшифровку"
+          />
         ) : (
           <div className="max-w-xl">
-            <p className="text-sm text-slate-600">Выжимка ещё не составлялась. Расшифровка уже на месте.</p>
+            <p className="text-sm text-slate-600">
+              Вы остановились на расшифровке. Выжимку не отправляли, деньги не потрачены.
+            </p>
             <div className="no-print mt-4 flex flex-wrap items-center gap-4">
-              <Button onClick={onReview} disabled={busy}>
+              <Button onClick={() => setRedoOpen(true)} disabled={busy}>
                 Составить выжимку
               </Button>
-              {!canResummarise && analysis.cache_key === "" ? (
+              {!canResummarise ? (
                 <p className="text-xs text-slate-500">
-                  Эта запись сохранена в старом формате. Чтобы составить выжимку заново, загрузите
-                  файл повторно. Готовой расшифровки от прошлого раза у нас не осталось.
+                  Готовой расшифровки от прошлого раза не осталось, поэтому составить выжимку можно будет
+                  только после повторной загрузки файла.
                 </p>
               ) : null}
             </div>
@@ -308,45 +324,6 @@ function Document({
  *  The point is stated in the first line: the recording does not get listened
  *  to again. Without that, a second summary reads as a second full run, and the
  *  cost line beside the button would look like it applies to both. */
-function RedoPanel({
-  settings,
-  preset,
-  onPreset,
-  estimate,
-  busy,
-  canRun,
-  onRun,
-}: {
-  settings: SettingsState;
-  preset: string;
-  onPreset: (preset: string) => void;
-  estimate: EstimateResult | null;
-  busy: boolean;
-  canRun: boolean;
-  onRun: () => void;
-}) {
-  return (
-    <div className="mt-3 max-w-xl space-y-3 rounded border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs text-slate-600">
-        Расшифровка уже готова и повторно не считается. Уйдёт только выжимка.
-      </p>
-      <PresetPicker presets={settings.presets} value={preset} onChange={onPreset} disabled={busy} />
-      {settings.extra ? (
-        <p className="border-l-2 border-slate-300 pl-3 text-xs text-slate-600">
-          Плюс ваше требование: «{settings.extra}»
-        </p>
-      ) : null}
-      <EstimateLine estimate={estimate} waiting={busy} />
-      <Button onClick={onRun} disabled={busy || !canRun}>
-        {busy ? "Составляем…" : "Составить заново"}
-      </Button>
-      {!settings.has_key ? <p className="text-xs text-slate-500">Сначала откройте настройки и задайте ключ.</p> : null}
-      {settings.has_key && !canRun ? (
-        <p className="text-xs text-slate-500">Расшифровка этой записи больше не сохранена. Загрузите файл заново, это займёт столько же времени.</p>
-      ) : null}
-    </div>
-  );
-}
 
 export default function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -361,6 +338,8 @@ export default function App() {
   const [settings, setSettings] = useState<SettingsState | null>(null);
   const [preset, setPreset] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Откуда открыли настройки: из пустого экрана, из истории или из протокола. */
+  const [settingsFrom, setSettingsFrom] = useState<"empty" | "document">("empty");
   /** Seconds each stage took last time, keyed by stage name. The progress line
    *  turns them into "осталось примерно N с" -- honest, because the estimate
    *  comes from this machine's own earlier runs rather than a guess. */
@@ -472,9 +451,10 @@ export default function App() {
     } catch (caught) {
       // The failed file is not the session on screen — drop that stale result,
       // otherwise the error reads as belonging to the document below it.
-      setCurrent(null);
-      setView("empty");
       fail(caught instanceof Error ? caught.message : String(caught));
+      // Документ, который уже открыт, не трогаем: неудавшийся файл к нему
+      // отношения не имеет, и человек терял бы место без причины.
+      if (view === "empty") setCurrent(null);
     } finally {
       setBusy("none");
       setProgress(null);
@@ -576,6 +556,11 @@ export default function App() {
     },
     [notice],
   );
+
+  const openSettings = () => {
+    setSettingsFrom(view === "document" && current ? "document" : "empty");
+    setSettingsOpen(true);
+  };
 
   const removeSession = (id: string) => {
     setSessions((previous) => previous.filter((session) => session.id !== id));
@@ -738,7 +723,7 @@ export default function App() {
           )}
           <div className="mt-8 border-t border-slate-200 pt-3">
             <button
-              onClick={() => setSettingsOpen((open) => !open)}
+              onClick={() => (settingsOpen ? setSettingsOpen(false) : openSettings())}
               aria-expanded={settingsOpen}
               aria-controls="settings-panel"
               className={`focus-ring flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors ${
@@ -774,9 +759,9 @@ export default function App() {
                     компьютере.
                   </p>
                 </div>
-                <Button variant="ghost" onClick={() => setSettingsOpen(false)} ariaLabel="Вернуться к записям">
+                <Button variant="ghost" onClick={() => setSettingsOpen(false)} ariaLabel={settingsFrom === "document" ? "Вернуться к протоколу" : "Вернуться к записям"}>
                   <ArrowLeft aria-hidden className="h-4 w-4" />
-                  К записям
+                  {settingsFrom === "document" ? "К протоколу" : "К записям"}
                 </Button>
               </div>
               <SettingsPanel
@@ -797,7 +782,7 @@ export default function App() {
               <p className="text-sm font-medium text-red-900">Не задан ключ</p>
               <p className="mt-1 text-sm text-red-800">
                 Запись всё равно расшифруется и личные данные будут скрыты, но ответа модели не будет. Откройте{" "}
-                <button onClick={() => setSettingsOpen(true)} className="font-medium underline">
+                <button onClick={openSettings} className="font-medium underline">
                   «Настройки»
                 </button>{" "}
                 в левой панели и вставьте ключ.
@@ -881,7 +866,7 @@ export default function App() {
               onPreset={setPreset}
               onSend={() => void runSummary(current)}
               onSkip={() => setView("document")}
-              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenSettings={openSettings}
               busy={busy === "summarising"}
             />
           ) : null}
@@ -893,7 +878,7 @@ export default function App() {
               preset={preset}
               onPreset={setPreset}
               onResummarise={() => void runSummary(current)}
-              onReview={() => setView("review")}
+              onOpenSettings={openSettings}
               busy={busy === "summarising"}
               onAnother={() => inputRef.current?.click()}
             />

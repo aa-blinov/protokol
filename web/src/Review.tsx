@@ -8,7 +8,8 @@
 
 import { useState } from "react";
 import { MaskedView } from "./Highlight";
-import { EstimateLine, formatCount, humanDuration, pluralRu, PresetPicker, useEstimate } from "./SummaryControls";
+import { formatCount, humanDuration, pluralRu, useEstimate } from "./SummaryControls";
+import { ComposeGate } from "./ComposeGate";
 import { Button, Section } from "./ui";
 import { ShieldCheck } from "lucide-react";
 import type { AnalysisResult, SettingsState } from "./api";
@@ -97,27 +98,22 @@ export function Review({
       </Section>
 
       <Section label="Какую выжимку составить">
-        <div className="max-w-xl space-y-4">
-          <PresetPicker presets={settings.presets} value={preset} onChange={onPreset} disabled={busy} />
-          {settings.extra ? (
-            <p className="border-l-2 border-slate-300 pl-3 text-xs text-slate-600">
-              Плюс ваше требование: «{settings.extra}»
-            </p>
-          ) : null}
-          <EstimateLine estimate={estimate} waiting />
-        </div>
+        <ComposeGate
+          settings={settings}
+          preset={preset}
+          onPreset={onPreset}
+          estimate={estimate}
+          busy={busy}
+          canRun={canSend}
+          runLabel="Составить выжимку"
+          onRun={onSend}
+          onOpenSettings={onOpenSettings}
+        />
       </Section>
 
-      <div className="no-print mt-8 flex flex-wrap items-center gap-4 border-t border-slate-200 pt-6">
-        {canSend ? (
-          <Button onClick={onSend} disabled={busy} size="lg">
-            {busy ? "Составляем…" : "Составить выжимку"}
-          </Button>
-        ) : (
-          <Button onClick={onOpenSettings} size="lg">
-            Открыть настройки
-          </Button>
-        )}
+      {/* Leaving without a summary is a decision, not a dead end: the document
+          below says so plainly and offers the same gate again. */}
+      <div className="no-print mt-8 border-t border-slate-200 pt-6">
         <Button variant="text" onClick={onSkip} disabled={busy}>
           Оставить только расшифровку
         </Button>
