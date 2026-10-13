@@ -41,6 +41,44 @@ SCREENS = [
 
 # Only what the eye compares between two controls sitting next to each other.
 # Colours are left out on purpose: the audit already checks them.
+# A field and a button that share a row are read as one control. If their
+# heights differ, the eye sees the mismatch before it reads either one — and
+# the computed border colour can be identical on both, so a colour check never
+# notices. This is the whole reason the search field beside «Скачать .txt» kept
+# looking wrong with no other check able to say why.
+PAIRS = """
+(() => {
+  const round = (n) => Math.round(parseFloat(n) || 0);
+  const out = [];
+  document.querySelectorAll('input:not([type=hidden]), select, textarea').forEach((field) => {
+    if (!field.getClientRects().length) return;
+    const f = field.getBoundingClientRect();
+    // Walk up: the search field's button is two wrappers above it, the key
+    // field's is one. Looking only at the immediate parent misses half of them.
+    let row = field.parentElement;
+    for (let depth = 0; depth < 4 && row; depth++) {
+      for (const sibling of row.children) {
+        if (sibling === field || sibling.tagName !== 'BUTTON') continue;
+        const b = sibling.getBoundingClientRect();
+        if (!b.height) continue;
+        const beside = b.left >= f.right - 2 || f.left >= b.right - 2;
+        const sameRow = Math.min(b.bottom, f.bottom) - Math.max(b.top, f.top) > 0;
+        if (beside && sameRow) {
+          out.push({
+            field: (field.getAttribute('aria-label') || field.placeholder || field.tagName).slice(0, 30),
+            fh: round(f.height),
+            button: (sibling.getAttribute('aria-label') || sibling.textContent || '').trim().slice(0, 24),
+            bh: round(b.height),
+          });
+        }
+      }
+      row = row.parentElement;
+    }
+  });
+  return out;
+})()
+"""
+
 SIGNATURE = """
 (() => {
   const round = (n) => Math.round(parseFloat(n) || 0);
@@ -138,6 +176,7 @@ def main() -> int:
 
     seen: dict[tuple, list[str]] = {}
     fields: list[dict] = []
+    pairs: list[dict] = []
     for name, action in SCREENS:
         tab.js("location.reload()")
         time.sleep(2.2)
@@ -153,6 +192,7 @@ def main() -> int:
             seen.setdefault(key, []).append(f"{name}: {item['label']}")
             if item["tag"] in ("input", "select") and item["type"] not in ("hidden", "radio", "checkbox", "file"):
                 fields.append(item)
+        pairs.extend(tab.js(PAIRS) or [])
 
     print(f"Групп по внешнему виду: {len(seen)}\n")
     for key, labels in sorted(seen.items(), key=lambda kv: (kv[0][0], kv[0][2])):
@@ -174,6 +214,14 @@ def main() -> int:
         print(f"\nПРОВАЛ: у полей разный угол: {sorted(radii)}")
         return 1
     print(f"\nПоля одного вида: {len(fields)} шт., высота {heights.pop() if heights else '—'}px, угол {radii.pop() if radii else '—'}.")
+
+    mismatched = [p for p in pairs if p["fh"] != p["bh"]]
+    for pair in mismatched:
+        print(f"  ПРОВАЛ: поле «{pair['field']}» {pair['fh']}px рядом с кнопкой "
+              f"«{pair['button']}» {pair['bh']}px")
+    if mismatched:
+        return 1
+    print(f"Поля рядом с кнопками совпадают по высоте: {len(pairs)} шт.")
     return 0
 
 

@@ -293,7 +293,7 @@ fi
 if [ -x "$EXE" ] && [ -f "$ROOT/benchmarks/check_controls.py" ]; then
   CTRL_OUT="$(python3 "$ROOT/benchmarks/check_controls.py" "$PORT" 2>&1)"
   CTRL_RC=$?
-  echo "$CTRL_OUT" | grep -E '^(ПРОВАЛ|Поля одного вида)' | sed 's/^/  /'
+  echo "$CTRL_OUT" | grep -E '^(ПРОВАЛ|Поля одного вида|Поля рядом с кнопками)' | sed 's/^/  /'
   if [ "$CTRL_RC" -eq 0 ]; then
     ok "поля ввода одного вида"
   else

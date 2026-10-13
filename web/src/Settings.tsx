@@ -409,7 +409,15 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
             onChange={(event) => setKey(event.target.value)}
             className={`${FIELD} w-full min-w-[12rem] flex-1 font-mono text-sm`}
           />
-          <Button variant="ghost" onClick={() => setReveal((r) => !r)} ariaLabel={reveal ? "Скрыть ключ" : "Показать ключ"}>
+          {/* 38 px to match the key field beside it, same reason as in the
+              document toolbar: 36 centres one pixel lower and the pair reads
+              as two controls of different sizes. */}
+          <Button
+            variant="ghost"
+            className="min-h-[38px]"
+            onClick={() => setReveal((r) => !r)}
+            ariaLabel={reveal ? "Скрыть ключ" : "Показать ключ"}
+          >
             {reveal ? <EyeOff aria-hidden className="h-4 w-4" /> : <Eye aria-hidden className="h-4 w-4" />}
           </Button>
         </div>

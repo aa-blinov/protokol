@@ -265,8 +265,13 @@ function Document({
             onStep={step}
           />
         </div>
+        {/* min-h-[38px] to match the field beside it: at 36 the buttons
+            centre inside the row and their borders sit a pixel off the search
+            box, which reads as a mis-drawn frame even though both borders are
+            the same colour. */}
         <Button
           variant="ghost"
+          className="min-h-[38px]"
           onClick={() =>
             downloadText(
               `${session.name.replace(/\.[^.]+$/, "")} (расшифровка).txt`,
@@ -279,11 +284,12 @@ function Document({
         >
           Скачать .txt
         </Button>
-        <Button variant="ghost" onClick={() => window.print()}>
+        <Button variant="ghost" className="min-h-[38px]" onClick={() => window.print()}>
           Печать / PDF
         </Button>
         <Button
           variant="ghost"
+          className="min-h-[38px]"
           onClick={() =>
             setFolded(anyFolded ? {} : { summary: true, transcript: true, masked: true })
           }
