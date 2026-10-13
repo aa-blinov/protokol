@@ -240,46 +240,57 @@ function Document({
             </span>
           ) : null}
         </p>
-        <div className="no-print mt-4 flex flex-wrap items-center gap-4">
-          {/* Transcript renders its search here. In the section body it folded
-              away with the section, and searching meant unfolding a dozen
-              screens of text first. */}
-          <div className="min-w-[13rem] flex-1">
-            <TranscriptSearch
-              query={query}
-              hits={hits}
-              cursor={cursor}
-              onQuery={setQuery}
-              onStep={step}
-            />
-          </div>
-          <Button
-            variant="ghost"
-            onClick={() =>
-              downloadText(
-                `${session.name.replace(/\.[^.]+$/, "")} (расшифровка).txt`,
-                buildReport(
-                  session,
-                  Object.fromEntries(settings.presets.map((item) => [item.key, item.label])),
-                ),
-              )
-            }
-          >
-            Скачать .txt
-          </Button>
-          <Button variant="ghost" onClick={() => window.print()}>
-            Печать / PDF
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() =>
-              setFolded(anyFolded ? {} : { summary: true, transcript: true, masked: true })
-            }
-          >
-            {anyFolded ? "Развернуть всё" : "Свернуть всё"}
-          </Button>
-        </div>
       </header>
+
+      {/* Outside the document header on purpose: a sticky element travels only
+          inside its own parent, and the header is 119 px tall — the bar would
+          have stuck for 119 px and then scrolled away exactly as before. */}
+      <div className="no-print sticky top-[77px] z-[5] flex flex-wrap items-center gap-4 border-b border-slate-100 bg-white py-3">
+        {/* Pinned under the app header. A document is thirteen screens tall at
+            half an hour, and a query you cannot change without scrolling back
+            to the top is a query you only get to type once. The 77 px is the
+            header's height, measured constant from 420 px to 1280 px by
+            benchmarks/probe_header_height.py; the header is z-10, so this sits
+            below it. Padding rather than margin, because a margin scrolls away
+            under a stuck element and leaves a gap content shows through. */}
+        {/* Transcript renders its search here. In the section body it folded
+            away with the section, and searching meant unfolding a dozen
+            screens of text first. */}
+        <div className="min-w-[13rem] flex-1">
+          <TranscriptSearch
+            query={query}
+            hits={hits}
+            cursor={cursor}
+            onQuery={setQuery}
+            onStep={step}
+          />
+        </div>
+        <Button
+          variant="ghost"
+          onClick={() =>
+            downloadText(
+              `${session.name.replace(/\.[^.]+$/, "")} (расшифровка).txt`,
+              buildReport(
+                session,
+                Object.fromEntries(settings.presets.map((item) => [item.key, item.label])),
+              ),
+            )
+          }
+        >
+          Скачать .txt
+        </Button>
+        <Button variant="ghost" onClick={() => window.print()}>
+          Печать / PDF
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() =>
+            setFolded(anyFolded ? {} : { summary: true, transcript: true, masked: true })
+          }
+        >
+          {anyFolded ? "Развернуть всё" : "Свернуть всё"}
+        </Button>
+      </div>
 
       {/* Size, not how long the model took: recordings summarised before the
           pipeline was split carry no timings, and "0 с на подготовку" reads as
