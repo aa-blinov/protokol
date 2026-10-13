@@ -104,6 +104,20 @@ fi
 PORT="$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1]);s.close()')"
 LOG="$(mktemp -t sttshka-verify.XXXXXX)"
 
+# The sidecar reads its settings — and with them sessions.json — from whatever
+# STTSHKA_ENV_FILE points at. Launched bare it falls back to a path inside the
+# bundle, so the interface checks below used to run against an empty app: 94 text
+# pairs instead of ~790, and the document screen had no document to measure. The
+# packaged app points this at the user's own file, and so does verify.sh — that
+# is the state actually worth auditing. On a machine with no such file the
+# checks fall back to seeding a session of their own.
+USER_ENV="$HOME/Library/Application Support/sttshka-desktop/.env"
+if [ -f "$USER_ENV" ]; then
+  note "данные приложения: $USER_ENV"
+  STTSHKA_ENV_FILE="$USER_ENV"
+  export STTSHKA_ENV_FILE
+fi
+
 HOST=127.0.0.1 PORT="$PORT" MODELS_DIR="$MODELS_DIR" \
   WEB_DIST_DIR="$RESOURCES/web" \
   "$EXE" >"$LOG" 2>&1 &
@@ -221,6 +235,24 @@ if [ -x "$EXE" ] && [ -f "$ROOT/benchmarks/ui_audit.py" ]; then
   fi
 else
   note "аудит интерфейса пропущен: нет $ROOT/benchmarks/ui_audit.py"
+fi
+
+# Сворачивание разделов. Отдельная проверка, а не часть аудита: аудит смотрит
+# контраст и геометрию у экранов в покое, а здесь нужно свернуть и развернуть
+# раздел настоящим кликом и сверить надпись на кнопке с тем, что на экране.
+# Раньше кнопка считала ключи в объекте, а не значения, и после одного цикла
+# «свернуть-развернуть» врала, что всё свёрнуто.
+if [ -x "$EXE" ] && [ -f "$ROOT/benchmarks/check_fold_button.py" ]; then
+  FOLD_OUT="$(python3 "$ROOT/benchmarks/check_fold_button.py" "http://127.0.0.1:$PORT" verify 2>&1)"
+  FOLD_RC=$?
+  echo "$FOLD_OUT" | sed 's/^/  /'
+  if [ "$FOLD_RC" -eq 0 ]; then
+    ok "разделы сворачиваются, надпись совпадает с состоянием"
+  else
+    bad "сворачивание разделов: надпись на кнопке разошлась с экраном"
+  fi
+else
+  note "проверка сворачивания пропущена: нет $ROOT/benchmarks/check_fold_button.py"
 fi
 
 kill "$SRV" 2>/dev/null

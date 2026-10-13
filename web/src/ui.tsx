@@ -7,6 +7,7 @@
 import { type ReactNode, useState } from "react";
 import { Button as ButtonSurface } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { ChevronDown } from "lucide-react";
 
 const BUTTON_SURFACE = {
   primary: "bg-blue-700 text-white hover:bg-blue-800 hover:text-white",
@@ -53,15 +54,67 @@ export function Button({
   );
 }
 
-/** A document section: small mono label, optional right-hand meta, hairline above. */
-export function Section({ label, meta, children }: { label: string; meta?: ReactNode; children: ReactNode }) {
+/** A document section: small mono label, optional right-hand meta, hairline above.
+ *  With `onToggle` the label folds the body away and `collapsedNote` stands in for
+ *  it, so a long document can be skimmed section by section. */
+export function Section({
+  label,
+  meta,
+  collapsedNote,
+  collapsed = false,
+  onToggle,
+  children,
+}: {
+  label: string;
+  meta?: ReactNode;
+  /** Shown instead of the body when collapsed, so the reader can tell what is
+   *  in there without opening it. */
+  collapsedNote?: string;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  children: ReactNode;
+}) {
+  // The label itself is the trigger, not a small link in the corner: a
+  // disclosure is a label that opens things, and a 12px «скрыть» on the right
+  // reads as another action competing with the ones beside it.
+  //
+  // The button covers the heading only and `meta` stays a sibling. Wrapping the
+  // whole row put the section's «Скопировать» inside another button — invalid
+  // HTML, and the click that copied the text also folded the section.
+  const LABEL = "font-mono text-[12px] font-medium uppercase tracking-[0.12em]";
+  const heading = onToggle ? (
+    <h3>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+        className={`focus-ring flex cursor-pointer items-baseline gap-1.5 rounded ${LABEL} text-slate-500 hover:text-slate-900`}
+      >
+        <ChevronDown
+          aria-hidden
+          className={`h-3.5 w-3.5 shrink-0 transition-transform ${collapsed ? "-rotate-90" : ""}`}
+        />
+        {label}
+        <span className="sr-only">, {collapsed ? "развернуть" : "свернуть"}</span>
+      </button>
+    </h3>
+  ) : (
+    <h3 className={`${LABEL} text-slate-500`}>{label}</h3>
+  );
+
   return (
     <section className="mt-8 border-t border-slate-200 pt-5">
       <div className="mb-4 flex items-baseline justify-between gap-4">
-        <h3 className="font-mono text-[12px] font-medium uppercase tracking-[0.12em] text-slate-500">{label}</h3>
+        {heading}
         {meta ? <div className="no-print text-xs text-slate-500">{meta}</div> : null}
       </div>
-      {children}
+      {collapsed ? (
+        collapsedNote ? (
+          <p className="text-xs text-slate-500">{collapsedNote}</p>
+        ) : null
+      ) : (
+        children
+      )}
     </section>
   );
 }

@@ -217,6 +217,40 @@ def audit_layout(tab) -> list[str]:
     return notes
 
 
+NESTED = """
+(() => {
+  const sel = 'button button, button a, a button, a a, button summary, summary button, button input';
+  return Array.from(document.querySelectorAll(sel)).map((el) => {
+    // The immediate parent is usually a wrapper div; what matters is which
+    // interactive element encloses it, so walk up to that one.
+    let node = el.parentElement;
+    let outer = '?';
+    while (node) {
+      const tag = node.tagName.toLowerCase();
+      if (tag === 'button' || tag === 'a' || tag === 'summary') { outer = tag; break; }
+      node = node.parentElement;
+    }
+    return outer + ' > ' + el.tagName.toLowerCase()
+      + ' «' + (el.textContent || el.value || '').trim().slice(0, 28) + '»';
+  });
+})()
+"""
+
+
+def audit_interactive(tab) -> list[str]:
+    """Nested interactive elements, on the document screen.
+
+    A button inside a button is invalid HTML, and in React it also means the
+    click meant for the inner control bubbled up and fired the outer handler:
+    the section folded itself when the reader asked to copy its text. Neither
+    contrast nor geometry catches that, so it is checked here.
+    """
+    offenders = tab.js(NESTED) or []
+    if offenders:
+        return ["вложенные интерактивные элементы: " + "; ".join(offenders)]
+    return ["вложенных интерактивных элементов нет"]
+
+
 def main() -> int:
     port = next((a for a in sys.argv[1:] if not a.startswith("--")), "8000")
     width = 1280
@@ -294,19 +328,27 @@ def main() -> int:
                                      "got": round(got, 2), "need": need, **item})
 
     layout = audit_layout(tab)
+    nested = audit_interactive(tab)
+    layout.extend(nested)
+    nested_bad = len(nested) and not nested[0].endswith("нет")
+    total = len(failures) + (1 if nested_bad else 0)
 
     Path("/tmp/ui-audit.json").write_text(
-        json.dumps({"checked": checked, "failures": failures, "layout": layout},
-                   ensure_ascii=False, indent=2))
+        json.dumps({"checked": checked, "failures": failures, "layout": layout,
+                    "nested_interactive": nested}, ensure_ascii=False, indent=2))
     print(f"Проверено текстовых пар: {checked}")
     for line in layout:
         print("  " + line)
     print()
+    if nested_bad:
+        print(f"Провалов: {total}\n")
+        print(f"  документ  вложенные интерактивные элементы: {nested[0].split(': ', 1)[-1]}")
+        return total
     if not failures:
         print("Контраст в порядке во всех состояниях и обеих темах.")
         return 0
 
-    print(f"Провалов: {len(failures)}\n")
+    print(f"Провалов: {total}\n")
     seen = set()
     for failure in failures:
         key = (failure["screen"], failure["theme"], failure["cls"])
@@ -318,7 +360,7 @@ def main() -> int:
         print(f"          <{failure['tag']} class=\"{failure['cls']}\"> {failure['text']}")
         print(f"          текст rgb({failure['fg']['r']},{failure['fg']['g']},{failure['fg']['b']}) "
               f"на rgb({failure['bg']['r']},{failure['bg']['g']},{failure['bg']['b']})")
-    return len(failures)
+    return total
 
 
 if __name__ == "__main__":

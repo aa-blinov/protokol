@@ -17,7 +17,7 @@ import { Toasts, type Notice } from "./Toast";
 import { ComposeGate } from "./ComposeGate";
 import { SettingsPanel } from "./Settings";
 import { Transcript } from "./Transcript";
-import { ActualCostLine, humanDuration, pluralRu, useEstimate } from "./SummaryControls";
+import { ActualCostLine, formatCount, humanDuration, pluralRu, useEstimate } from "./SummaryControls";
 import { Button, CopyButton, Markdown, ProgressBar, Section } from "./ui";
 import {
   ArrowLeft,
@@ -127,8 +127,17 @@ function Document({
     [analysis.segments],
   );
   const tokens = Object.keys(analysis.entity_map).length;
-  const [maskedOpen, setMaskedOpen] = useState(false);
   const [redoOpen, setRedoOpen] = useState(false);
+  /** Which sections the reader has folded away. Reading a long transcript is
+   *  the common case and reading the summary is the common case; both should
+   *  not cost a scroll past each other every time. */
+  const [folded, setFolded] = useState<Record<string, boolean>>({});
+  const toggle = (key: string) => setFolded((prev) => ({ ...prev, [key]: !prev[key] }));
+  /** Count folded sections by their value, not by how many keys the record has.
+   *  Toggling a section off leaves its key behind set to false, so counting keys
+   *  made the header button say «Развернуть всё» with everything already open —
+   *  and clicking it folded instead. */
+  const anyFolded = Object.values(folded).some(Boolean);
   const estimate = useEstimate(analysis.masked_text.length, settings.model);
   /** Recordings from before the pipeline was split have no cached analysis, so
    *  a second summary would have nothing to run on. Saying so beats offering a
@@ -193,11 +202,27 @@ function Document({
           <Button variant="ghost" onClick={() => window.print()}>
             Печать / PDF
           </Button>
+          <Button
+            variant="ghost"
+            onClick={() =>
+              setFolded(anyFolded ? {} : { summary: true, transcript: true, masked: true })
+            }
+          >
+            {anyFolded ? "Развернуть всё" : "Свернуть всё"}
+          </Button>
         </div>
       </header>
 
+      {/* Size, not how long the model took: recordings summarised before the
+          pipeline was split carry no timings, and "0 с на подготовку" reads as
+          a measured zero rather than a number nobody wrote down. */}
       <Section
         label="Выжимка"
+        collapsed={Boolean(folded.summary)}
+        onToggle={() => toggle("summary")}
+        collapsedNote={
+          summary ? `${formatCount(summary.reply_unmasked.length)} знаков` : "не составлялась"
+        }
         meta={summary ? <CopyButton text={summary.reply_unmasked} /> : null}
       >
         {summary ? (
@@ -279,46 +304,44 @@ function Document({
         )}
       </Section>
 
-      <Section label="Расшифровка" meta={<CopyButton text={transcriptText(analysis)} />}>
+      <Section
+        label="Расшифровка"
+        meta={<CopyButton text={transcriptText(analysis)} />}
+        collapsed={Boolean(folded.transcript)}
+        onToggle={() => toggle("transcript")}
+        collapsedNote={`${formatCount(transcriptText(analysis).length)} знаков, ${speakers > 1 ? `${speakers} спикеров` : "один голос"}`}
+      >
         <Transcript analysis={analysis} />
       </Section>
 
       <Section
         label="Что уходит в модель"
-        meta={
-          <button
-            onClick={() => setMaskedOpen((open) => !open)}
-            className="focus-ring rounded text-xs text-blue-700 underline"
-          >
-            {maskedOpen ? "Свернуть" : "Показать целиком"}
-          </button>
-        }
+        collapsed={Boolean(folded.masked)}
+        onToggle={() => toggle("masked")}
+        collapsedNote={`${formatCount(analysis.masked_text.length)} знаков, ${tokens} ${pluralRu(tokens, "подстановка", "подстановки", "подстановок")}`}
       >
-        {maskedOpen ? (
-          <>
-            <div className="max-h-[30rem] max-w-[68ch] overflow-y-auto text-[15px] leading-7 text-slate-800">
-              <MaskedView text={analysis.masked_text} entityMap={analysis.entity_map} />
-            </div>
+        {/* One level of folding, not two. The section already collapses; a
+            separate "показать целиком" inside it meant three states for what is
+            really one decision. */}
+        <div className="max-h-[30rem] max-w-[68ch] overflow-y-auto text-[15px] leading-7 text-slate-800">
+          <MaskedView text={analysis.masked_text} entityMap={analysis.entity_map} />
+        </div>
 
-            {tokens > 0 ? (
-              <details className="no-print mt-4">
-                <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">
-                  Таблица подстановок
-                </summary>
-                <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
-                  {Object.entries(analysis.entity_map).map(([token, value]) => (
-                    <li key={token} className="flex items-baseline gap-2 text-xs">
-                      <span className={chipClass(token.replace(/_\d+$/, ""))}>{token}</span>
-                      <span className="font-mono text-slate-600">{value}</span>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-          </>
-        ) : (
-          <MaskedView text={analysis.masked_text.slice(0, 400)} entityMap={analysis.entity_map} />
-        )}
+        {tokens > 0 ? (
+          <details className="no-print mt-4">
+            <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">
+              Таблица подстановок
+            </summary>
+            <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
+              {Object.entries(analysis.entity_map).map(([token, value]) => (
+                <li key={token} className="flex items-baseline gap-2 text-xs">
+                  <span className={chipClass(token.replace(/_\d+$/, ""))}>{token}</span>
+                  <span className="font-mono text-slate-600">{value}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
       </Section>
     </article>
   );
