@@ -11,12 +11,12 @@ import {
   getSessions,
   saveSessions,
 } from "./api";
-import { chipClass, MaskedView } from "./Highlight";
+import { chipClass, findHits, MaskedView } from "./Highlight";
 import { Review } from "./Review";
 import { Toasts, type Notice } from "./Toast";
 import { ComposeGate } from "./ComposeGate";
 import { SettingsPanel } from "./Settings";
-import { Transcript } from "./Transcript";
+import { Transcript, TranscriptSearch } from "./Transcript";
 import { ActualCostLine, formatCount, humanDuration, pluralRu, useEstimate } from "./SummaryControls";
 import { Button, CopyButton, FIELD, Markdown, ProgressBar, Section } from "./ui";
 import {
@@ -147,6 +147,20 @@ function Document({
    *  than reads, the section says how much is in there, and the arrow opens it
    *  in one click if the checking matters today. */
   const [folded, setFolded] = useState<Record<string, boolean>>({ masked: true });
+  /* Search lives here, not inside the transcript section: folding that section
+     unmounts whatever is in it, and a search that folds away with the text it
+     searches for is no search at all. */
+  const [query, setQuery] = useState("");
+  const [cursor, setCursor] = useState(0);
+  const hits = useMemo(
+    () => findHits(analysis.transcript, query),
+    [analysis.transcript, query],
+  );
+  // Reset on a new query and on a different recording: the second leaves the
+  // cursor pointing past the end of a shorter list.
+  useEffect(() => setCursor(0), [query, analysis.transcript]);
+  const step = (direction: 1 | -1) =>
+    setCursor((index) => (index + direction + hits.length) % hits.length);
   const toggle = (key: string) => setFolded((prev) => ({ ...prev, [key]: !prev[key] }));
   /** Count folded sections by their value, not by how many keys the record has.
    *  Toggling a section off leaves its key behind set to false, so counting keys
@@ -214,6 +228,18 @@ function Document({
           ) : null}
         </p>
         <div className="no-print mt-4 flex flex-wrap items-center gap-4">
+          {/* Transcript renders its search here. In the section body it folded
+              away with the section, and searching meant unfolding a dozen
+              screens of text first. */}
+          <div className="min-w-[13rem] flex-1">
+            <TranscriptSearch
+              query={query}
+              hits={hits}
+              cursor={cursor}
+              onQuery={setQuery}
+              onStep={step}
+            />
+          </div>
           <Button
             variant="ghost"
             onClick={() =>
@@ -365,11 +391,11 @@ function Document({
       <Section
         label="Расшифровка"
         meta={<CopyButton text={transcriptText(analysis)} />}
-        collapsed={Boolean(folded.transcript)}
+        collapsed={Boolean(folded.transcript) && query.trim() === ""}
         onToggle={() => toggle("transcript")}
         collapsedNote={`${formatCount(transcriptText(analysis).length)} знаков, ${speakers > 1 ? `${speakers} спикеров` : "один голос"}`}
       >
-        <Transcript analysis={analysis} />
+        <Transcript analysis={analysis} query={query} hits={hits} cursor={cursor} />
       </Section>
 
       <Section

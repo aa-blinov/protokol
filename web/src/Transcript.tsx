@@ -10,20 +10,102 @@
  *  «Показать целиком» underneath, which was a second way of saying «тут есть
  *  ещё» next to the section arrow that now does the one job. */
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { findHits, Highlighted, MAX_HITS, type Hit } from "./Highlight";
+import { useEffect, useRef } from "react";
+import { Highlighted, MAX_HITS, type Hit } from "./Highlight";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 import { FIELD } from "./ui";
 import type { AnalysisResult, Entity } from "./api";
 
-export function Transcript({ analysis }: { analysis: AnalysisResult }) {
-  const [query, setQuery] = useState("");
-  const [cursor, setCursor] = useState(0);
+/** The search row, rendered by the caller into the document header.
+ *
+ *  It used to live inside the transcript section, which meant folding the
+ *  section folded the search with it -- and searching meant unfolding a dozen
+ *  screens of text first. The caller owns the state and renders this; the
+ *  transcript body only needs to know which match is current. */
+export function TranscriptSearch({
+  query,
+  hits,
+  cursor,
+  onQuery,
+  onStep,
+}: {
+  query: string;
+  hits: Hit[];
+  cursor: number;
+  onQuery: (value: string) => void;
+  onStep: (direction: 1 | -1) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="relative min-w-[12rem] flex-1">
+        <Search
+          aria-hidden
+          className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+        />
+        <input
+          value={query}
+          onChange={(event) => onQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") onStep(event.shiftKey ? -1 : 1);
+            if (event.key === "Escape" && query) {
+              event.stopPropagation();
+              onQuery("");
+            }
+          }}
+          placeholder="Поиск по расшифровке"
+          aria-label="Поиск по расшифровке"
+          className={`${FIELD} w-full pl-8 pr-8 text-sm placeholder:text-slate-500`}
+        />
+        {query ? (
+          <button
+            onClick={() => onQuery("")}
+            aria-label="Очистить поиск"
+            className="focus-ring absolute right-1 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-slate-500 hover:bg-slate-100"
+          >
+            <X aria-hidden className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
+
+      {query ? (
+        <div className="flex items-center gap-1">
+          <span className="tabular-nums text-xs text-slate-500">
+            {hits.length ? `${cursor + 1} из ${hits.length}` : "не найдено"}
+          </span>
+          <button
+            onClick={() => onStep(-1)}
+            disabled={!hits.length}
+            aria-label="Предыдущее совпадение"
+            className="focus-ring grid h-8 w-8 place-items-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+          >
+            <ChevronUp aria-hidden className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => onStep(1)}
+            disabled={!hits.length}
+            aria-label="Следующее совпадение"
+            className="focus-ring grid h-8 w-8 place-items-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+          >
+            <ChevronDown aria-hidden className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function Transcript({
+  analysis,
+  query,
+  hits,
+  cursor,
+}: {
+  analysis: AnalysisResult;
+  query: string;
+  hits: Hit[];
+  cursor: number;
+}) {
   const root = useRef<HTMLDivElement>(null);
-
-  const hits = useMemo(() => findHits(analysis.transcript, query), [analysis.transcript, query]);
-
-  useEffect(() => setCursor(0), [query]);
 
   // Bring the current match into view. Selected by attribute rather than by a
   // ref, because a match can land inside a personal-data chip and then there is
@@ -34,84 +116,13 @@ export function Transcript({ analysis }: { analysis: AnalysisResult }) {
     node?.scrollIntoView({ block: "center", behavior: "auto" });
   }, [cursor, hits.length]);
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Enter" || !hits.length) return;
-      event.preventDefault();
-      setCursor((index) => (index + (event.shiftKey ? -1 : 1) + hits.length) % hits.length);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [hits.length]);
-
-  const step = (direction: 1 | -1) => {
-    setCursor((index) => (index + direction + hits.length) % hits.length);
-  };
-
   return (
     <div>
-      <div className="no-print mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[12rem] flex-1">
-          <Search
-            aria-hidden
-            className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-          />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") step(event.shiftKey ? -1 : 1);
-              if (event.key === "Escape" && query) {
-                event.stopPropagation();
-                setQuery("");
-              }
-            }}
-            placeholder="Поиск по расшифровке"
-            aria-label="Поиск по расшифровке"
-            className={`${FIELD} w-full pl-8 pr-8 text-sm placeholder:text-slate-500`}
-          />
-          {query ? (
-            <button
-              onClick={() => setQuery("")}
-              aria-label="Очистить поиск"
-              className="focus-ring absolute right-1 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-slate-500 hover:bg-slate-100"
-            >
-              <X aria-hidden className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-        </div>
-
-        {query ? (
-          <div className="flex items-center gap-1">
-            <span className="tabular-nums text-xs text-slate-500">
-              {hits.length ? `${cursor + 1} из ${hits.length}` : "не найдено"}
-            </span>
-            <button
-              onClick={() => step(-1)}
-              disabled={!hits.length}
-              aria-label="Предыдущее совпадение"
-              className="focus-ring grid h-8 w-8 place-items-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-            >
-              <ChevronUp aria-hidden className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => step(1)}
-              disabled={!hits.length}
-              aria-label="Следующее совпадение"
-              className="focus-ring grid h-8 w-8 place-items-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-            >
-              <ChevronDown aria-hidden className="h-4 w-4" />
-            </button>
-          </div>
-        ) : null}
-      </div>
-
-      {hits.length >= MAX_HITS ? (
+      {query && hits.length >= MAX_HITS ? (
         <p className="mb-3 text-xs text-slate-500">
           Показаны первые {MAX_HITS} совпадений. Дополните запрос, чтобы сузить поиск.
         </p>
       ) : null}
-
       <div ref={root}>
         <Body analysis={analysis} hits={hits} cursor={cursor} />
       </div>
