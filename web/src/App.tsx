@@ -18,7 +18,7 @@ import { ComposeGate } from "./ComposeGate";
 import { SettingsPanel } from "./Settings";
 import { Transcript } from "./Transcript";
 import { ActualCostLine, formatCount, humanDuration, pluralRu, useEstimate } from "./SummaryControls";
-import { Button, CopyButton, Markdown, ProgressBar, Section } from "./ui";
+import { Button, CopyButton, FIELD, Markdown, ProgressBar, Section } from "./ui";
 import {
   ArrowLeft,
   ChevronDown,
@@ -687,7 +687,7 @@ export default function App() {
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Поиск"
               aria-label="Поиск по истории"
-              className="focus-ring mt-3 w-full rounded border border-slate-200 bg-white px-2 py-1 text-sm placeholder:text-slate-500"
+              className={`${FIELD} mt-3 w-full text-sm placeholder:text-slate-500`}
             />
           ) : null}
           {sessions.length === 0 ? (
@@ -750,7 +750,7 @@ export default function App() {
                         if (event.key === "Escape") setEditingId(null);
                       }}
                       aria-label="Новое имя сессии"
-                      className="focus-ring min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm"
+                      className={`${FIELD} min-w-0 flex-1 text-sm`}
                     />
                   ) : (
                     <>

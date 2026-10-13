@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { findHits, Highlighted, MAX_HITS, type Hit } from "./Highlight";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
+import { FIELD } from "./ui";
 import type { AnalysisResult, Entity } from "./api";
 
 export function Transcript({ analysis }: { analysis: AnalysisResult }) {
@@ -67,7 +68,7 @@ export function Transcript({ analysis }: { analysis: AnalysisResult }) {
             }}
             placeholder="Поиск по расшифровке"
             aria-label="Поиск по расшифровке"
-            className="focus-ring w-full rounded border border-slate-300 bg-white py-1.5 pl-8 pr-8 text-sm placeholder:text-slate-500"
+            className={`${FIELD} w-full pl-8 pr-8 text-sm placeholder:text-slate-500`}
           />
           {query ? (
             <button

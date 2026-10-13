@@ -19,7 +19,7 @@ import {
   type ModelInfo,
   type SettingsState,
 } from "./api";
-import { Button, Section } from "./ui";
+import { Button, FIELD, Section } from "./ui";
 import { PresetPicker } from "./SummaryControls";
 import { Eye, EyeOff, Search } from "lucide-react";
 
@@ -165,7 +165,7 @@ function ModelPicker({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm hover:bg-slate-50"
+        className={`${FIELD} flex w-full items-center justify-between gap-3 text-left text-sm hover:bg-slate-50`}
       >
         <span className="min-w-0 truncate font-mono text-[13px]">
           {selected ? selected.id : <span className="text-slate-500">Модель не выбрана</span>}
@@ -354,7 +354,11 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
             setModels([]);
           }}
           aria-label="Сервис для текста"
-          className="focus-ring w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+          // The height is spelled out because Chrome sizes <select> from its own
+          // inner box: the same padding that makes every other field 38px leaves
+          // this one at 37. Not visible side by side, but the fields below are a
+          // set, and a set that is a pixel off is a set that looks unfinished.
+          className={`${FIELD} h-[38px] w-full text-sm`}
         >
           {!service ? (
             <option value="custom">Другой адрес</option>
@@ -376,7 +380,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
           spellCheck={false}
           placeholder="https://openrouter.ai/api/v1"
           aria-label="Адрес сервиса"
-          className="focus-ring mt-2 w-full rounded border border-slate-300 px-3 py-2 font-mono text-sm"
+          className={`${FIELD} mt-2 w-full font-mono text-sm`}
         />
         <p className="mt-2 text-xs text-slate-500">
           {service
@@ -403,7 +407,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
                   : "вставьте ключ сюда"
             }
             onChange={(event) => setKey(event.target.value)}
-            className="focus-ring w-full min-w-[12rem] flex-1 rounded border border-slate-300 px-3 py-2 font-mono text-sm"
+            className={`${FIELD} w-full min-w-[12rem] flex-1 font-mono text-sm`}
           />
           <Button variant="ghost" onClick={() => setReveal((r) => !r)} ariaLabel={reveal ? "Скрыть ключ" : "Показать ключ"}>
             {reveal ? <EyeOff aria-hidden className="h-4 w-4" /> : <Eye aria-hidden className="h-4 w-4" />}
@@ -427,7 +431,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
                 onChange={(event) => setModel(event.target.value)}
                 placeholder="например gpt-4o-mini"
                 aria-label="Название модели вручную"
-                className="focus-ring mt-2 w-full rounded border border-slate-300 px-3 py-2 font-mono text-sm"
+                className={`${FIELD} mt-2 w-full font-mono text-sm`}
               />
             ) : null}
             <p className="mt-2 text-xs text-slate-600">
@@ -457,7 +461,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
           rows={3}
           placeholder="Свои требования, если нужно что-то ещё: например «выдели только договорённости по деньгам и срокам»"
           aria-label="Свои требования к выжимке"
-          className="focus-ring mt-3 w-full resize-y rounded border border-slate-300 px-3 py-2 text-sm"
+          className={`${FIELD} mt-3 w-full resize-y text-sm`}
         />
         <p className="mt-2 text-xs text-slate-600">
           Инструкции о персональных данных остаются в силе при любом выборе.

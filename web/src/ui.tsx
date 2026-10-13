@@ -15,6 +15,16 @@ const BUTTON_SURFACE = {
   text: "text-slate-500 hover:bg-transparent hover:text-slate-900",
 } as const;
 
+/** Border, padding and radius for every single-line field.
+ *
+ *  These used to be spelled out at each site and had drifted to three heights
+ *  and two border shades. Nobody names that, everybody sees it -- a settings
+ *  panel whose fields do not line up reads as unfinished even when each field
+ *  is correct on its own. `check_controls.py` fails the build if it drifts
+ *  again. Add `pl-`/`pr-` after this for an inset icon; Tailwind emits those
+ *  later, so they win. */
+export const FIELD = "focus-ring rounded border border-slate-300 bg-white px-3 py-2 leading-5";
+
 export function Button({
   children,
   onClick,

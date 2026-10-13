@@ -255,6 +255,22 @@ else
   note "проверка сворачивания пропущена: нет $ROOT/benchmarks/check_fold_button.py"
 fi
 
+# Одноразовые поля разной высоты. Отдельная проверка, потому что контраст и
+# геометрия её не видят: поле на 30 px рядом с полем на 38 px проходит обе, но
+# глазом это панель, собранная из разных деталей.
+if [ -x "$EXE" ] && [ -f "$ROOT/benchmarks/check_controls.py" ]; then
+  CTRL_OUT="$(python3 "$ROOT/benchmarks/check_controls.py" "$PORT" 2>&1)"
+  CTRL_RC=$?
+  echo "$CTRL_OUT" | grep -E '^(ПРОВАЛ|Поля одного вида)' | sed 's/^/  /'
+  if [ "$CTRL_RC" -eq 0 ]; then
+    ok "поля ввода одного вида"
+  else
+    bad "поля ввода разной высоты или с разным углом"
+  fi
+else
+  note "проверка полей пропущена: нет $ROOT/benchmarks/check_controls.py"
+fi
+
 kill "$SRV" 2>/dev/null
 
 section "Итог"
