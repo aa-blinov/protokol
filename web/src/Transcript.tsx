@@ -4,26 +4,23 @@
  *  linearly -- people go back to it for one thing they half-remember being
  *  said. Search is over the original text, not the masked copy, because the
  *  person searching wants the words that were spoken; the personal-data chips
- *  stay visible underneath so it is still obvious what would be hidden. */
+ *  stay visible underneath so it is still obvious what would be hidden.
+ *
+ *  The whole transcript is rendered. It used to stop at the first screen with a
+ *  «Показать целиком» underneath, which was a second way of saying «тут есть
+ *  ещё» next to the section arrow that now does the one job. */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { findHits, Highlighted, MAX_HITS, type Hit } from "./Highlight";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 import type { AnalysisResult, Entity } from "./api";
 
-const CAP = 4000;
-
 export function Transcript({ analysis }: { analysis: AnalysisResult }) {
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
-  const [full, setFull] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
   const hits = useMemo(() => findHits(analysis.transcript, query), [analysis.transcript, query]);
-  // Searching a transcript that is capped to its first screen would report hits
-  // nobody can see, so the cap lifts itself the moment a query is typed.
-  const expanded = full || query.trim().length > 0;
-  const long = analysis.transcript.length > CAP;
 
   useEffect(() => setCursor(0), [query]);
 
@@ -34,7 +31,7 @@ export function Transcript({ analysis }: { analysis: AnalysisResult }) {
     if (!hits.length) return;
     const node = root.current?.querySelector(`[data-hit="${cursor}"]`);
     node?.scrollIntoView({ block: "center", behavior: "auto" });
-  }, [cursor, hits.length, expanded]);
+  }, [cursor, hits.length]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -106,12 +103,6 @@ export function Transcript({ analysis }: { analysis: AnalysisResult }) {
             </button>
           </div>
         ) : null}
-
-        {long && !expanded && !query ? (
-          <button onClick={() => setFull(true)} className="focus-ring rounded text-xs text-blue-700 underline">
-            Показать целиком
-          </button>
-        ) : null}
       </div>
 
       {hits.length >= MAX_HITS ? (
@@ -120,7 +111,7 @@ export function Transcript({ analysis }: { analysis: AnalysisResult }) {
         </p>
       ) : null}
 
-      <div ref={root} className={long && !expanded ? "max-h-[30rem] overflow-y-auto pr-2" : undefined}>
+      <div ref={root}>
         <Body analysis={analysis} hits={hits} cursor={cursor} />
       </div>
     </div>

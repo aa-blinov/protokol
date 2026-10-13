@@ -130,8 +130,12 @@ function Document({
   const [redoOpen, setRedoOpen] = useState(false);
   /** Which sections the reader has folded away. Reading a long transcript is
    *  the common case and reading the summary is the common case; both should
-   *  not cost a scroll past each other every time. */
-  const [folded, setFolded] = useState<Record<string, boolean>>({});
+   *  not cost a scroll past each other every time.
+   *
+   *  The masked text starts folded: it is the part a reader verifies rather
+   *  than reads, the section says how much is in there, and the arrow opens it
+   *  in one click if the checking matters today. */
+  const [folded, setFolded] = useState<Record<string, boolean>>({ masked: true });
   const toggle = (key: string) => setFolded((prev) => ({ ...prev, [key]: !prev[key] }));
   /** Count folded sections by their value, not by how many keys the record has.
    *  Toggling a section off leaves its key behind set to false, so counting keys

@@ -252,6 +252,15 @@ def run_checks(tab: Tab, shot_prefix: str, failures: list[str]) -> int:
         print(f"  что нашлось: {state}")
         return 1
 
+    # Start from a known state: a section that opens folded by default would
+    # otherwise keep the header button reading «Развернуть всё» whatever this
+    # scenario does to the others.
+    if not all(state.values()):
+        if click_text(tab, "Развернуть всё"):
+            time.sleep(0.7)
+            state = tab.js(STATE_JS)
+        print(f"  приведено к раскрытому: {state}")
+
     # The scenario that used to break: fold one section by its header, then
     # open it again. Both clicks are real React state updates.
     tab.js(
