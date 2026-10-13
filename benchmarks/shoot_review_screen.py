@@ -113,7 +113,7 @@ def main() -> int:
     # Wait for the review screen: it is the only state that has preset radios.
     for _ in range(120):
         time.sleep(1)
-        if tab.js("document.querySelectorAll('[role=radio]').length") == 3:
+        if tab.js("document.querySelectorAll('input[type=radio]').length") == 3:
             break
     else:
         print("НЕ ДОШЁЛ до экрана проверки")

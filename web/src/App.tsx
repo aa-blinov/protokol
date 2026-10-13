@@ -161,6 +161,19 @@ function Document({
   useEffect(() => setCursor(0), [query, analysis.transcript]);
   const step = (direction: 1 | -1) =>
     setCursor((index) => (index + direction + hits.length) % hits.length);
+
+  // Enter walks the matches from anywhere on the page, not only while the field
+  // has focus: the point of the search is to stop looking at the input and read.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Enter" || !hits.length) return;
+      if (event.target instanceof HTMLInputElement) return;
+      event.preventDefault();
+      setCursor((index) => (index + (event.shiftKey ? -1 : 1) + hits.length) % hits.length);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hits.length]);
   const toggle = (key: string) => setFolded((prev) => ({ ...prev, [key]: !prev[key] }));
   /** Count folded sections by their value, not by how many keys the record has.
    *  Toggling a section off leaves its key behind set to false, so counting keys
