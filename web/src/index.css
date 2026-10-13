@@ -139,6 +139,28 @@ body {
      focus ring reads --ring, so the identity lives in the tokens themselves. */
   --primary: #1d4ed8;
   --primary-foreground: #ffffff;
+  /* The blue scale the interface actually uses, restored to Tailwind's values.
+     shadcn rewrites every `--color-blue-*` to its own indigo, so `bg-blue-700`
+     on the primary button was painting #4338ca-ish rather than the #1d4ed8 the
+     design doc names as the one accent. The tokens file was right and the screen
+     was wrong, which is the worst way to be wrong: nothing errored. */
+  /* slate-500 sits at 4.35:1 on this app's own panel colour and 4.48:1 on
+     white — under the 4.5:1 floor for body text, 205 times over. Tailwind's
+     value was never wrong in general, only against this ground. One shade
+     darker clears it on both surfaces with room to spare. */
+  --color-slate-500: #5b6a82;
+  --color-blue-50: #eff6ff;
+  --color-blue-300: #93c5fd;
+  --color-blue-700: #1d4ed8;
+  --color-blue-800: #1e40af;
+  --color-blue-900: #1e3a8a;
+  /* Restated as a --color-* token because Tailwind v4 resolves bg-primary
+     through --color-primary, and the library's own :root declares that name as
+     its indigo. Declaring only --primary left every primary button in the app
+     wearing shadcn's default blue while the design doc called for #1d4ed8 —
+     the palette was right in the token file and wrong on screen. */
+  --color-primary: #1d4ed8;
+  --color-primary-foreground: #ffffff;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -326,3 +348,84 @@ body {
 .dark .border-slate-400:focus { border-color: var(--accent-ink); }
 .dark .text-red-700 { color: #fca5a5; }
 .dark .bg-red-50 .text-red-900 { color: #fee2e2; }
+
+/* -------------------------------------------------------------------- print
+   Paper is not a screen: controls that need a click are noise on it, and the
+   grey-on-white the screen relies on goes to near-invisible. */
+
+@media print {
+  /* Anything you would have to press does not belong on paper. */
+  button, input, select, textarea, [role="radiogroup"], .focus-ring { display: none !important; }
+  /* The transcript is the document; the chrome around it is not. */
+  header, aside { display: none !important; }
+  /* Grey chosen for a lit screen disappears on paper. */
+  body, p, li, span, h1, h2, h3, h4, div, td, th { color: #111827 !important; }
+  mark, .chip { color: #111827 !important; border: 1px solid #9ca3af !important; }
+  a { color: #111827 !important; text-decoration: none; }
+  h2, h3 { break-after: avoid; }
+  article { max-width: none !important; }
+  pre, blockquote, table { break-inside: avoid; }
+}
+
+/* ---------------------------------------------------------- browser surfaces
+   The parts of the page nobody draws and everybody uses: selection, scrollbars,
+   underlines, caret. Left on defaults they carry the browser's own palette,
+   which here is a saturated system blue against a quiet slate ground — the one
+   place in the interface where something bright blue appears that we did not
+   choose. */
+
+/* Selection. Ink goes dark on the accent rather than light on dark, so the
+   copied text stays readable whichever way the user swipes. */
+::selection { background: #bfdbfe; color: #0f172a; }
+.dark ::selection { background: #1e40af; color: #eff6ff; }
+
+/* Scrollbars. WebKit needs the pseudo-elements; Firefox takes the standard
+   pair. Thumb only — a full track would draw a second frame around every
+   scrollable box the interface already frames with a hairline. */
+* { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+.dark * { scrollbar-color: #475569 transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-clip: content-box;
+}
+.dark ::-webkit-scrollbar-thumb { background-color: #475569; }
+::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
+.dark ::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
+
+/* Underlines. Default offset puts the line through the descenders of «ц»,
+   «й» and «р», which in this typeface reads as a strike. */
+a, button, .focus-ring { text-underline-offset: 0.18em; }
+a { text-decoration-thickness: from-font; }
+
+/* Caret. Same accent as the focus ring, so typing looks like it belongs. */
+:root { caret-color: #1d4ed8; }
+.dark { caret-color: #93c5fd; }
+
+/* --------------------------------------------------------------- zoom & text
+
+   Long unbroken strings — a URL inside the model's context note, an
+   identifier, a filename the user cannot shorten — are what break a two-column
+   layout when the window is narrow. Break them at any character rather than
+   letting them push the grid sideways. */
+p, li, td, th, span, code, kbd, .break-anywhere {
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------- forced / high contrast
+
+   Windows' forced-colors mode discards author colours wholesale. Two things
+   then go wrong here: the focus ring is drawn in `outline`, which survives, but
+   the selected preset loses its fill and the radio becomes the only signal;
+   and the tinted status bands lose their background, leaving their left stripe
+   as the sole marker. Both are stated explicitly rather than left to fall out. */
+@media (forced-colors: active) {
+  .focus-ring:focus-visible { outline: 2px solid CanvasText; outline-offset: 2px; }
+  [role="radio"] { forced-color-adjust: none; border: 1px solid CanvasText; }
+  [data-active="true"] { border: 2px solid Highlight; }
+  mark, .chip { border: 1px solid CanvasText; }
+  * { scrollbar-color: CanvasText transparent; }
+}

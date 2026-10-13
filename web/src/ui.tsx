@@ -45,7 +45,7 @@ export function Button({
       disabled={disabled}
       aria-label={ariaLabel}
       aria-expanded={ariaExpanded}
-      variant={variant === "primary" ? "default" : "ghost"}
+      variant="bare"
       className={`rounded-[6px] ${size === "lg" ? "min-h-12 px-6 text-base" : "min-h-9 px-3"} ${BUTTON_SURFACE[variant]} ${className ?? ""}`}
     >
       {children}

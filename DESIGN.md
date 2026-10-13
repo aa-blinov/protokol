@@ -176,6 +176,25 @@ Numbers follow the same rule. The review screen used to print "5 личных д
 ### Space Before Weight
 `Скачать .txt`, `Печать / PDF` and `Обработать ещё` were three identical ghost buttons in one row, which made the one button worth pressing look like the two nobody presses. The exports stay adjacent; the loop moves to the far edge as a text button. Separating by space costs nothing and the quiet world does not need another colour to say "primary".
 
+### The Accent Is Not `blue-700`
+
+`#1d4ed8` is the one accent, and the interface says `bg-blue-700` in fourteen places. Those are not the same colour: shadcn rewrites the whole `--color-blue-*` scale to its own indigo, so every one of those fourteen resolved to `#4338ca`-ish while the token file named `#1d4ed8`. The palette was right on paper and wrong on screen, and nothing errored.
+
+Two consequences, both now enforced:
+
+- The five shades the interface actually uses are restated in `:root` — `50`, `300`, `700`, `800`, `900`. Restating the one scale beats hunting for every offending class.
+- The button wrapper passes the library a variant with no background of its own. Previously the wrapper's `bg-blue-700` and the library's `bg-primary` both applied to the same button and the library won on cascade order.
+
+### Browser Surfaces
+
+Selection, scrollbars, underline offset and the caret are drawn by the browser, not by us, and they arrive in the system blue — the one place on screen where a colour nobody chose appears. All four are themed here.
+
+Selection tints the *background* and leaves the ink dark rather than the reverse, so copied text stays readable whichever way the user swipes. Underlines get `0.18em` offset: at the default the line crosses the descenders of «ц» and «й», which in this typeface reads as a strike.
+
+### Forced Colours
+
+In Windows' high-contrast mode author colours are discarded. The focus ring survives (it is an `outline`), but the selected preset loses its fill and a tinted status band loses its background — in both cases leaving one weak signal. Stated explicitly under `forced-colors: active`.
+
 ### Entity chips (signature)
 Mono, `0.8125rem`, `4px` radius, 1px border, saturated background with tone-on-tone text (see the palette). Stateless inline markers inside the running text.
 

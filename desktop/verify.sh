@@ -204,6 +204,25 @@ else
   bad "sidecar не отдаёт интерфейс"
 fi
 
+# ------------------------------------------------- интерфейс: контраст и вид
+# The sidecar is still up here, which is the point: contrast and layout can
+# only be judged against a real render, and every check above it is about the
+# API. This is the only part that would have caught the dark-theme preset
+# sitting unreadable, or the primary button wearing the library's indigo.
+section "Интерфейс"
+if [ -x "$EXE" ] && [ -f "$ROOT/benchmarks/ui_audit.py" ]; then
+  AUDIT_OUT="$(python3 "$ROOT/benchmarks/ui_audit.py" "$PORT" 2>&1)"
+  AUDIT_RC=$?
+  echo "$AUDIT_OUT" | sed 's/^/  /'
+  if [ "$AUDIT_RC" -eq 0 ]; then
+    ok "контраст, ширины, зум и печать в порядке"
+  else
+    bad "аудит интерфейса: $AUDIT_RC провалов (подробности выше)"
+  fi
+else
+  note "аудит интерфейса пропущен: нет $ROOT/benchmarks/ui_audit.py"
+fi
+
 kill "$SRV" 2>/dev/null
 
 section "Итог"

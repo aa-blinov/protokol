@@ -625,7 +625,7 @@ export default function App() {
       </header>
 
       <div className="mx-auto grid max-w-5xl grid-cols-1 gap-x-10 gap-y-8 px-6 py-8 lg:grid-cols-[200px_1fr] print:grid-cols-1">
-        <aside className="no-print self-start">
+        <aside className="no-print order-2 self-start lg:order-1">
           {/* The collection owns "new". A header action inside one document is
               object-scoped by convention and cannot be found from any other
               screen, so the only reliable place for the app's primary action is
@@ -800,7 +800,7 @@ export default function App() {
           </div>
         </aside>
 
-        <main {...dropHandlers} className={`min-w-0 ${dragging ? "rounded-lg ring-2 ring-blue-300" : ""}`}>
+        <main {...dropHandlers} className={`order-1 min-w-0 lg:order-2 ${dragging ? "rounded-lg ring-2 ring-blue-300" : ""}`}>
           <input
             ref={inputRef}
             type="file"
@@ -887,7 +887,7 @@ export default function App() {
           ) : null}
 
           {!settingsOpen && view === "empty" && !error && busy !== "analysing" ? (
-            <div className="flex min-h-[380px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 px-6 py-12 text-center">
+            <div className="no-print flex min-h-[380px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 px-6 py-12 text-center">
               <Mark className="h-10 w-10" />
               <h2 className="mt-4 max-w-sm text-lg font-semibold tracking-tight text-slate-900">
                 Загрузите запись встречи
@@ -911,7 +911,7 @@ export default function App() {
           ) : null}
 
           {!settingsOpen && view === "empty" && busy === "analysing" ? (
-            <div className="flex min-h-[380px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 px-6 py-12 text-center">
+            <div className="no-print flex min-h-[380px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 px-6 py-12 text-center">
               <Mark className="h-10 w-10" />
               <h2 className="mt-4 max-w-sm text-lg font-semibold tracking-tight text-slate-900">
                 Обрабатываем запись
