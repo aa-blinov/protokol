@@ -14,16 +14,25 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import config  # noqa: E402
 import settings  # noqa: E402
 
 
 @pytest.fixture
 def store(tmp_path, monkeypatch):
-    """Point the store at a throwaway file and keep the process clean."""
+    """Point the store at a throwaway file and keep the process clean.
+
+    Clearing os.environ is not enough: `apply` writes through to the config
+    module's own attributes, and those outlive the monkeypatch. Without this the
+    previous test's key is still in force and the next one asserts against it.
+    """
     path = tmp_path / "settings.env"
     monkeypatch.setenv("STTSHKA_ENV_FILE", str(path))
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.delenv("LLM_MODEL", raising=False)
+    for name in ("OPENROUTER_API_KEY", "LLM_MODEL", "OPENROUTER_BASE_URL", "LLM_PROVIDER_KEYS"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "")
+    monkeypatch.setattr(config, "DEFAULT_LLM_MODEL", "")
+    monkeypatch.setattr(config, "OPENROUTER_BASE_URL", settings.DEFAULT_BASE_URL)
     return path
 
 
@@ -132,3 +141,71 @@ class TestPricing:
     def test_unparseable_price(self):
         assert settings._price(None) is None
         assert settings._price("n/a") is None
+
+class TestKeysPerService:
+    """Each service keeps its own key, so switching away and back costs nothing.
+
+    The other half of it is the rule that made this necessary: a key belongs to
+    the address it was issued for, so moving to a service with no key of its own
+    must not leave the previous service's key in force to be tried there.
+    """
+
+    OPENROUTER = "https://openrouter.ai/api/v1"
+    OPENAI = "https://api.openai.com/v1"
+
+    def test_key_is_filed_under_its_address(self, store):
+        settings.save("sk-or-v1-one", "vendor/one", self.OPENROUTER)
+        settings.save("sk-proj-two", "gpt-5.4-mini", self.OPENAI)
+        assert settings.provider_keys() == {self.OPENROUTER: "sk-or-v1-one", self.OPENAI: "sk-proj-two"}
+
+    def test_switching_back_finds_the_original_key(self, store):
+        settings.save("sk-or-v1-one", "vendor/one", self.OPENROUTER)
+        settings.save("sk-proj-two", "gpt-5.4-mini", self.OPENAI)
+        assert settings.key_for(self.OPENROUTER) == "sk-or-v1-one"
+
+    def test_service_with_no_key_is_left_without_one(self, store):
+        settings.save("sk-or-v1-one", "vendor/one", self.OPENROUTER)
+        settings.save("", "gpt-5.4-mini", self.OPENAI)
+        assert settings.current_key() == ""
+        assert not settings.key_for(self.OPENAI)
+
+    def test_the_old_key_is_kept_in_the_map_even_while_switched_away(self, store):
+        settings.save("sk-or-v1-one", "vendor/one", self.OPENROUTER)
+        settings.save("", "gpt-5.4-mini", self.OPENAI)
+        assert settings.provider_keys()[self.OPENROUTER] == "sk-or-v1-one"
+
+    def test_changing_only_the_model_keeps_the_key(self, store):
+        settings.save("sk-or-v1-one", "vendor/one", self.OPENROUTER)
+        settings.save("", "vendor/two", self.OPENROUTER)
+        assert settings.current_key() == "sk-or-v1-one"
+
+    def test_a_key_written_before_the_map_still_belongs_to_the_current_address(
+        self, store, monkeypatch
+    ):
+        # The app used to keep exactly one key. On the next start that key is the
+        # one in force and it belongs to whichever address is configured, so
+        # key_for has to answer with it -- no migration step, no retyping.
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-old")
+        monkeypatch.setenv("OPENROUTER_BASE_URL", self.OPENROUTER)
+        assert settings.provider_keys() == {}
+        assert settings.key_for(self.OPENROUTER) == "sk-or-v1-old"
+        assert settings.key_for(self.OPENAI) == ""
+
+    def test_trailing_slash_does_not_matter(self, store):
+        settings.save("sk-or-v1-one", "vendor/one", self.OPENROUTER + "/")
+        assert settings.key_for(self.OPENROUTER) == "sk-or-v1-one"
+
+    def test_unreadable_map_is_ignored_not_fatal(self, store):
+        import os
+
+        os.environ["LLM_PROVIDER_KEYS"] = "{not json"
+        assert settings.provider_keys() == {}
+
+    def test_switching_away_files_the_key_that_predates_the_map(self, store, monkeypatch):
+        # The dangerous one: a settings file from before this map existed holds a
+        # key and no map. Moving to another service must not consume it.
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-old")
+        monkeypatch.setenv("OPENROUTER_BASE_URL", self.OPENROUTER)
+        settings.save("", "gpt-5.4-mini", self.OPENAI)
+        assert settings.current_key() == ""
+        assert settings.provider_keys()[self.OPENROUTER] == "sk-or-v1-old"

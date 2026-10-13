@@ -35,6 +35,76 @@ function formatContext(value: number | null): string {
   return `${Math.round(value / 1000)}K`;
 }
 
+/** Services worth offering, with a model to start from and the shape of their key.
+ *
+ *  Addresses and key prefixes are stable facts about each service. The model
+ *  here is only a starting point: the list in «Какая модель отвечает» comes
+ *  live from the service itself, so a stale suggestion is corrected by picking
+ *  from the real list rather than by editing code.
+ *
+ *  Anything not listed still works -- the address below stays editable for a
+ *  self-hosted endpoint or a service that appears later. */
+const SERVICES: {
+  id: string;
+  label: string;
+  baseUrl: string;
+  model: string;
+  keyHint: string;
+  keyPage: string;
+}[] = [
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "deepseek/deepseek-v4.1-flash",
+    keyHint: "sk-or-v1-…",
+    keyPage: "https://openrouter.ai/keys",
+  },
+  {
+    id: "openai",
+    label: "OpenAI",
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-5.4-mini",
+    keyHint: "sk-proj-… или sk-…",
+    keyPage: "https://platform.openai.com/api-keys",
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic (Claude)",
+    baseUrl: "https://api.anthropic.com/v1",
+    model: "claude-sonnet-5",
+    keyHint: "sk-ant-…",
+    keyPage: "https://console.anthropic.com/settings/keys",
+  },
+  {
+    id: "gemini",
+    label: "Google Gemini",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    model: "gemini-3.8-flash",
+    keyHint: "AIza…",
+    keyPage: "https://aistudio.google.com/apikey",
+  },
+  {
+    id: "groq",
+    label: "Groq",
+    baseUrl: "https://api.groq.com/openai/v1",
+    model: "openai/gpt-oss-120b",
+    keyHint: "gsk_…",
+    keyPage: "https://console.groq.com/keys",
+  },
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    baseUrl: "https://api.deepseek.com",
+    model: "deepseek-flash",
+    keyHint: "sk-…",
+    keyPage: "https://platform.deepseek.com/api_keys",
+  },
+];
+
+const matchService = (baseUrl: string) =>
+  SERVICES.find((s) => s.baseUrl === baseUrl.trim().replace(/\/+$/, "")) ?? null;
+
 /** Case-insensitive match over id and display name, id first so prefixes win. */
 function filterModels(models: ModelInfo[], query: string): ModelInfo[] {
   const needle = query.trim().toLowerCase();
@@ -181,6 +251,10 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
    *  The model list is loaded from that provider, so there is nothing to pick
    *  from before that point -- showing an empty picker would only be noise. */
   const [keyOk, setKeyOk] = useState(false);
+  const service = useMemo(() => matchService(baseUrl), [baseUrl]);
+  /** The key stored for whichever service is on screen — the backend never
+   *  sends the key itself, only enough of it to tell two apart. */
+  const savedHint = service ? state?.saved_keys?.[service.baseUrl] : state?.key_hint;
   const [busy, setBusy] = useState<"check" | "save" | null>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "bad" | "idle"; text: string }>({ tone: "idle", text: "" });
   const selected = useMemo(() => models.find((m) => m.id === model), [models, model]);
@@ -268,6 +342,31 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
   return (
     <div className="space-y-6">
       <Section label="Сервис для текста">
+        <select
+          value={service?.id ?? "custom"}
+          onChange={(event) => {
+            const picked = SERVICES.find((s) => s.id === event.target.value);
+            if (!picked) return;
+            setBaseUrl(picked.baseUrl);
+            setModel(picked.model);
+            setKey("");
+            setKeyOk(false);
+            setModels([]);
+          }}
+          aria-label="Сервис для текста"
+          className="focus-ring w-full rounded border border-slate-300 bg-white px-3 py-2 text-sm"
+        >
+          {!service ? (
+            <option value="custom">Другой адрес</option>
+          ) : null}
+          {SERVICES.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+              {state?.saved_keys?.[s.baseUrl] ? " — ключ сохранён" : ""}
+            </option>
+          ))}
+        </select>
+
         <input
           value={baseUrl}
           onChange={(event) => {
@@ -277,10 +376,13 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
           spellCheck={false}
           placeholder="https://openrouter.ai/api/v1"
           aria-label="Адрес сервиса"
-          className="focus-ring w-full rounded border border-slate-300 px-3 py-2 font-mono text-sm"
+          className="focus-ring mt-2 w-full rounded border border-slate-300 px-3 py-2 font-mono text-sm"
         />
         <p className="mt-2 text-xs text-slate-500">
-          Можно указать любой совместимый сервис. Сменили адрес, введите ключ заново.
+          {service
+            ? `Ключ этого сервиса начинается с ${service.keyHint}.`
+            : "Свой адрес: подойдёт любой сервис с OpenAI-совместимым API."}{" "}
+          Ключ каждого сервиса хранится отдельно и не теряется при переключении.
         </p>
       </Section>
 
@@ -294,9 +396,11 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
             spellCheck={false}
             aria-label="Ключ API"
             placeholder={
-              state?.has_key
-                ? `сохранён ${state.key_hint}. Вставьте новый, чтобы заменить`
-                : "вставьте ключ сюда"
+              savedHint
+                ? `сохранён ${savedHint}. Вставьте новый, чтобы заменить`
+                : service
+                  ? `ключ ${service.keyHint} — вставьте сюда`
+                  : "вставьте ключ сюда"
             }
             onChange={(event) => setKey(event.target.value)}
             className="focus-ring w-full min-w-[12rem] flex-1 rounded border border-slate-300 px-3 py-2 font-mono text-sm"
@@ -306,8 +410,8 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
           </Button>
         </div>
         <p className="mt-2 text-xs text-slate-500">
-          {state?.has_key ? "Ключ сохранён, заново вводить его не нужно." : "Ключ пока не задан."}{" "}
-          <a className="text-blue-700 underline" href={state?.key_page ?? "https://openrouter.ai/keys"} target="_blank" rel="noreferrer">
+          {savedHint ? "Ключ сохранён, заново вводить его не нужно." : "Ключ пока не задан."}{" "}
+          <a className="text-blue-700 underline" href={service?.keyPage ?? state?.key_page ?? "https://openrouter.ai/keys"} target="_blank" rel="noreferrer">
             Получить ключ
           </a>
         </p>

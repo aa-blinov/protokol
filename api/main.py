@@ -143,6 +143,10 @@ def _settings_state() -> schemas.SettingsState:
         presets=[
             {"key": key, "label": label} for key, label in PRESET_LABELS.items()
         ],
+        saved_keys={
+            address: settings.KeyHint.of(saved).masked
+            for address, saved in settings.provider_keys().items()
+        },
     )
 
 
@@ -469,7 +473,11 @@ def summarize(request: schemas.SummarizeRequest) -> schemas.SummarizeResult:
     )
 
 
-_PRICES: dict[str, dict[str, float | None]] = {}
+# Prices belong to the address they were fetched from. Keyed by it, because the
+# service is switchable now: one flat cache would keep OpenAI's price-less
+# catalogue after a trip back to OpenRouter and every estimate would quietly
+# read "unknown" until the app restarted.
+_PRICES: dict[str, dict[str, dict[str, float | None]]] = {}
 
 
 def _price_of(model: str, which: str) -> float | None:
@@ -478,25 +486,27 @@ def _price_of(model: str, which: str) -> float | None:
 
 
 def _load_prices() -> dict[str, dict[str, float | None]]:
-    """Fetch the provider's prices once and keep them for the session.
+    """Fetch one address's prices once and keep them for the session.
 
     Lazy rather than at import: it is a network call, and the app must start
     without a key and without a connection. The models list is public on
-    OpenRouter, so this works before a key is even entered.
+    OpenRouter, so this works before a key is even entered. Other services
+    answer /models too, but without the price fields, so their models come back
+    unpriced rather than wrongly priced.
     """
-    global _PRICES
-    if not _PRICES:
+    root = settings.current_base_url()
+    if root not in _PRICES:
         try:
-            _PRICES = {
+            _PRICES[root] = {
                 item["id"]: {
-                    "prompt": item["prompt_price"],
-                    "completion": item["completion_price"],
+                    "prompt": item.get("prompt_price"),
+                    "completion": item.get("completion_price"),
                 }
                 for item in settings.list_models("")
             }
         except RuntimeError:
-            _PRICES = {}
-    return _PRICES
+            _PRICES[root] = {}
+    return _PRICES[root]
 
 
 @app.post("/api/estimate", response_model=schemas.EstimateResult)

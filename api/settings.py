@@ -17,6 +17,7 @@ response is intercepted.
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,6 +31,7 @@ MODEL_ENV = "LLM_MODEL"
 BASE_URL_ENV = "OPENROUTER_BASE_URL"
 PRESET_ENV = "LLM_PRESET"
 EXTRA_ENV = "LLM_EXTRA"
+KEYS_ENV = "LLM_PROVIDER_KEYS"
 
 KEY_PAGE = "https://openrouter.ai/keys"
 CREDITS_PAGE = "https://openrouter.ai/credits"
@@ -73,12 +75,56 @@ def current_key() -> str:
     return (os.getenv(KEY_ENV) or config.OPENROUTER_API_KEY or "").strip()
 
 
+def provider_keys() -> dict[str, str]:
+    """Keys kept per address, so switching service and back costs nothing.
+
+    One JSON line rather than a file per provider: the settings file already
+    exists, already ships with the app, and is already the thing someone may
+    edit by hand.
+    """
+    raw = (os.getenv(KEYS_ENV) or "").strip()
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        str(address).strip().rstrip("/"): str(key).strip()
+        for address, key in data.items()
+        if isinstance(key, str) and key.strip()
+    }
+
+
+def key_for(base_url: str = "") -> str:
+    """The key saved for this address, if there is one.
+
+    Falls back to the key in force when the address is the one already in force.
+    That is what makes a settings file written before this map existed keep
+    working: the single key belongs to whatever address is configured, and only
+    the map needs filling in from the next save onwards.
+    """
+    address = (base_url.strip() or current_base_url()).rstrip("/")
+    saved = provider_keys()
+    if address in saved:
+        return saved[address]
+    return current_key() if address == current_base_url().rstrip("/") else ""
+
+
 def current_model() -> str:
     return (os.getenv(MODEL_ENV) or config.DEFAULT_LLM_MODEL).strip()
 
 
 def write_pair(
-    key: str, model: str, base_url: str = "", preset: str = "", extra: str | None = None
+    key: str,
+    model: str,
+    base_url: str = "",
+    preset: str = "",
+    extra: str | None = None,
+    keys_json: str = "",
+    keep_key: bool = True,
 ) -> Path:
     """Persist the three values, leaving any other line in the file untouched.
 
@@ -96,15 +142,16 @@ def write_pair(
             if not stripped or stripped.startswith("#"):
                 continue
             name = stripped.partition("=")[0].strip()
-            if name in (KEY_ENV, MODEL_ENV, BASE_URL_ENV, PRESET_ENV, EXTRA_ENV):
+            if name in (KEY_ENV, MODEL_ENV, BASE_URL_ENV, PRESET_ENV, EXTRA_ENV, KEYS_ENV):
                 stored[name] = stripped.partition("=")[2].strip().strip("'\"")
                 continue
             kept.append(stripped)
     resolved = {
-        KEY_ENV: key.strip() or stored.get(KEY_ENV, ""),
+        KEY_ENV: (key.strip() or stored.get(KEY_ENV, "")) if keep_key else "",
         MODEL_ENV: model.strip() or stored.get(MODEL_ENV, ""),
         BASE_URL_ENV: base_url.strip() or stored.get(BASE_URL_ENV, ""),
         PRESET_ENV: preset.strip() or stored.get(PRESET_ENV, ""),
+        KEYS_ENV: keys_json.strip() or stored.get(KEYS_ENV, ""),
         # `extra` is the one field where empty means "erase", not "keep": it is
         # a free-text box the user clears when the requirement no longer applies.
         # Everything else is a key or a value they are unlikely to blank.
@@ -117,7 +164,15 @@ def write_pair(
     return path
 
 
-def apply(key: str, model: str, base_url: str = "", preset: str = "", extra: str | None = None) -> None:
+def apply(
+    key: str,
+    model: str,
+    base_url: str = "",
+    preset: str = "",
+    extra: str | None = None,
+    keys_json: str = "",
+    keep_key: bool = True,
+) -> None:
     """Push the values into the live process so no restart is needed."""
     if key:
         os.environ[KEY_ENV] = key
@@ -132,13 +187,45 @@ def apply(key: str, model: str, base_url: str = "", preset: str = "", extra: str
         os.environ[PRESET_ENV] = preset
     if extra is not None:
         os.environ[EXTRA_ENV] = extra
+    if keys_json:
+        os.environ[KEYS_ENV] = keys_json
+    if not keep_key:
+        os.environ.pop(KEY_ENV, None)
+        config.OPENROUTER_API_KEY = ""
 
 
 def save(
-    key: str, model: str, base_url: str = "", preset: str = "", extra: str | None = None
+    key: str,
+    model: str,
+    base_url: str = "",
+    preset: str = "",
+    extra: str | None = None,
 ) -> None:
-    write_pair(key, model, base_url, preset, extra)
-    apply(key, model, base_url, preset, extra)
+    address = (base_url.strip() or current_base_url()).rstrip("/")
+    switching = address != current_base_url().rstrip("/")
+
+    # The key in force belongs to the address in force. When the address changes
+    # and nothing was typed, what belongs in force is that address's own key --
+    # including none at all, rather than the previous service's key offered to a
+    # service it was never issued by. Every key stays in the map either way, so
+    # coming back is a matter of picking the service again.
+    active = key.strip() or (key_for(address) if switching else "")
+    keep = not switching or bool(active)
+
+    merged = dict(provider_keys())
+    # File the key in force under the address in force *before* the address
+    # changes. A settings file written before this map existed holds one key and
+    # no map, and moving away from its service would drop that key for good,
+    # with nothing left to come back to.
+    current_address = current_base_url().rstrip("/")
+    if current_key() and current_address not in merged:
+        merged[current_address] = current_key()
+    if active:
+        merged[address] = active
+    keys_json = json.dumps(merged, ensure_ascii=False, sort_keys=True) if merged else ""
+
+    write_pair(active, model, base_url, preset, extra, keys_json, keep_key=keep)
+    apply(active, model, base_url, preset, extra, keys_json, keep_key=keep)
 
 
 def current_preset() -> str:

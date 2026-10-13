@@ -103,6 +103,10 @@ class SettingsState(BaseModel):
     preset: str = Field(default="decisions", description="What to pull out of the recording")
     extra: str = Field(default="", description="Extra requirement appended to the prompt")
     presets: list[dict] = Field(default_factory=list, description="Available presets with labels")
+    saved_keys: dict[str, str] = Field(
+        default_factory=dict,
+        description="Masked keys per API address, so switching service and back keeps each one",
+    )
 
 
 class SettingsUpdate(BaseModel):

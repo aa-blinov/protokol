@@ -24,7 +24,12 @@ import settings  # noqa: E402
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("STTSHKA_ENV_FILE", str(tmp_path / "settings.env"))
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    # The address too: any earlier test that saved a different service writes it
+    # into the config module, and `base_url` is reported straight from there.
+    monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_PROVIDER_KEYS", raising=False)
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "")
+    monkeypatch.setattr(config, "OPENROUTER_BASE_URL", settings.DEFAULT_BASE_URL)
     with TestClient(api.app) as test_client:
         yield test_client
 

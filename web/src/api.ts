@@ -236,6 +236,8 @@ export interface SettingsState {
   /** Extra requirement appended to the prompt; "" when none. */
   extra: string;
   presets: { key: string; label: string }[];
+  /** Masked key per API address, so switching service and back keeps each one. */
+  saved_keys: Record<string, string>;
 }
 
 export interface SettingsResult {
