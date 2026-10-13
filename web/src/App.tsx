@@ -24,6 +24,7 @@ import {
   ChevronDown,
   Moon,
   Pencil,
+  Plus,
   RefreshCw,
   Settings as SettingsIcon,
   Sun,
@@ -111,7 +112,6 @@ function Document({
   onResummarise,
   onOpenSettings,
   busy,
-  onAnother,
 }: {
   session: Session;
   settings: SettingsState;
@@ -120,7 +120,6 @@ function Document({
   onResummarise: () => void;
   onOpenSettings: () => void;
   busy: boolean;
-  onAnother: () => void;
 }) {
   const { analysis, summary } = session;
   const speakers = useMemo(
@@ -137,7 +136,16 @@ function Document({
   const canResummarise = analysis.cache_key !== "" && settings.has_key;
 
   return (
-    <article>
+    <article
+      onKeyDown={(event) => {
+        // Ворота живут внутри документа, поэтому Escape ловится здесь: из
+        // родителя до них не дотянуться.
+        if (event.key === "Escape" && redoOpen) {
+          event.stopPropagation();
+          setRedoOpen(false);
+        }
+      }}
+    >
       <header>
         <h2 className="break-words text-2xl font-semibold tracking-tight text-slate-900">{session.name}</h2>
         {/* Metadata is separated by space, not by dots: a row of · reads as
@@ -184,9 +192,6 @@ function Document({
           </Button>
           <Button variant="ghost" onClick={() => window.print()}>
             Печать / PDF
-          </Button>
-          <Button variant="text" onClick={onAnother} className="sm:ml-auto">
-            Обработать ещё
           </Button>
         </div>
       </header>
@@ -361,6 +366,7 @@ export default function App() {
   );
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
+  const listRef = useRef<HTMLUListElement>(null);
 
   // A ticking clock for the current run. Ticks once a second, which is also
   // the resolution any human reading "прошло 43 с" cares about.
@@ -384,6 +390,7 @@ export default function App() {
   useEffect(() => {
     void getSessions().then(setSessions).catch(() => setSessions([]));
   }, []);
+
 
   useEffect(() => {
     if (!sessions.length) return;
@@ -580,6 +587,14 @@ export default function App() {
   const visibleSessions = query
     ? sessions.filter((session) => session.name.toLowerCase().includes(query.trim().toLowerCase()))
     : sessions;
+  // Открытая запись всегда должна быть в поле зрения: переход к ней может
+  // прийти не из списка, и прокручивать его руками не должен никто.
+  useEffect(() => {
+    if (!current) return;
+    listRef.current
+      ?.querySelector('[data-active="true"]')
+      ?.scrollIntoView({ block: "nearest", behavior: "auto" });
+  }, [current, visibleSessions]);
 
   const showDocument = view === "document" && current !== null;
   const showReview = view === "review" && current !== null;
@@ -611,7 +626,15 @@ export default function App() {
 
       <div className="mx-auto grid max-w-5xl grid-cols-1 gap-x-10 gap-y-8 px-6 py-8 lg:grid-cols-[200px_1fr] print:grid-cols-1">
         <aside className="no-print self-start">
-          <h2 className="font-mono text-[12px] font-medium uppercase tracking-[0.12em] text-slate-500">
+          {/* The collection owns "new". A header action inside one document is
+              object-scoped by convention and cannot be found from any other
+              screen, so the only reliable place for the app's primary action is
+              here, where it is always in the same spot. */}
+          <Button onClick={() => inputRef.current?.click()} disabled={busy !== "none"} className="w-full">
+            <Plus aria-hidden className="h-4 w-4" />
+            Новая запись
+          </Button>
+          <h2 className="mt-7 font-mono text-[12px] font-medium uppercase tracking-[0.12em] text-slate-500">
             История
           </h2>
           {sessions.length > 0 ? (
@@ -628,9 +651,50 @@ export default function App() {
           ) : visibleSessions.length === 0 ? (
             <p className="mt-3 text-sm text-slate-500">Нет записей с таким названием</p>
           ) : (
-            <ul className="mt-2 space-y-0.5">
+            <ul
+              ref={listRef}
+              aria-label="Обработанные записи"
+              className="mt-2 space-y-0.5"
+              onKeyDown={(event) => {
+                const items = Array.from(
+                  listRef.current?.querySelectorAll<HTMLElement>("[data-item]") ?? [],
+                );
+                // Фокус стоит на кнопке внутри строки, а items — это сами строки,
+                // поэтому индекс ищем у ближайшего предка: иначе он всегда -1 и
+                // ни стрелка, ни F2, ни Delete не срабатывают.
+                const at = items.indexOf(
+                  (document.activeElement as HTMLElement)?.closest<HTMLElement>("[data-item]") ??
+                    (null as never),
+                );
+                // Фокусируем кнопку внутри строки, а не саму строку: <li> не
+                // фокусируем, и вызов focus() на нём молча ничего не делает.
+                const stepTo = (index: number) =>
+                  items[index]?.querySelector<HTMLElement>("button")?.focus();
+                if (event.key === "ArrowDown" && at > -1 && at < items.length - 1) {
+                  event.preventDefault();
+                  stepTo(at + 1);
+                } else if (event.key === "ArrowUp" && at > 0) {
+                  event.preventDefault();
+                  stepTo(at - 1);
+                } else if (event.key === "F2" && at > -1) {
+                  event.preventDefault();
+                  setEditingId(items[at].dataset.id ?? null);
+                  setDraft(items[at].dataset.name ?? "");
+                } else if ((event.key === "Delete" || event.key === "Backspace") && at > -1) {
+                  event.preventDefault();
+                  setConfirmDeleteId(items[at].dataset.id ?? null);
+                }
+              }}
+            >
               {visibleSessions.map((session) => (
-                <li key={session.id} className="group flex items-start">
+                <li
+                  key={session.id}
+                  data-item
+                  data-id={session.id}
+                  data-name={session.name}
+                  data-active={current?.id === session.id && !showReview}
+                  className="group flex items-start"
+                >
                   {editingId === session.id ? (
                     <input
                       autoFocus
@@ -880,7 +944,6 @@ export default function App() {
               onResummarise={() => void runSummary(current)}
               onOpenSettings={openSettings}
               busy={busy === "summarising"}
-              onAnother={() => inputRef.current?.click()}
             />
           ) : null}
         </main>
