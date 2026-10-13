@@ -172,7 +172,25 @@ def read_sessions() -> list[dict]:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return []
-    return data if isinstance(data, list) else []
+    if not isinstance(data, list):
+        return []
+    return [_migrate_session(item) for item in data]
+
+
+def _migrate_session(session: dict) -> dict:
+    """Give an older session the shape the app now expects.
+
+    Sessions used to hold a single `summary`, so switching the mode replaced it
+    and the earlier one was gone. They now hold one summary per mode. The single
+    summary becomes the entry for the mode it was made in — `preset` travels in
+    the summary itself — so nothing already on disk is lost and nothing has to be
+    summarised twice.
+    """
+    if not isinstance(session, dict) or "summaries" in session:
+        return session
+    summary = session.pop("summary", None)
+    session["summaries"] = {summary.get("preset") or "decisions": summary} if summary else {}
+    return session
 
 
 @app.put("/api/sessions")
@@ -442,7 +460,7 @@ def summarize(request: schemas.SummarizeRequest) -> schemas.SummarizeResult:
             "Расшифровка этой записи не сохранилась для повторной выжимки. "
             "Загрузите файл заново, это займёт столько же времени, сколько занял первый раз.",
         )
-    entity_map = (cached or {}).get("entity_map") or {}
+    entity_map = (cached or {}).get("entity_map") or request.entity_map or {}
     preset = request.preset or settings.current_preset()
     started = time.perf_counter()
     try:

@@ -182,6 +182,11 @@ class SummarizeRequest(BaseModel):
     # text already lives in the session file on this machine, so re-running a
     # summary should never depend on a bounded cache still holding it.
     masked_text: str = ""
+    # The map that puts the names back arrives with it. Without it a re-run over
+    # a recording whose cache entry is gone comes back full of [PERSON_1] where
+    # the names should be -- and that is exactly the recording most likely to
+    # need a re-run, because it is the one with no cache to read from.
+    entity_map: dict[str, str] = Field(default_factory=dict)
 
 
 class SummarizeResult(BaseModel):

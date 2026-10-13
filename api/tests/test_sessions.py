@@ -89,3 +89,49 @@ class TestStorageLocation:
         """The write goes through a temp file so a crash cannot truncate history."""
         client.put("/api/sessions", json=[make_session("a.mp3")])
         assert list(tmp_path.glob("*.tmp")) == []
+
+class TestSummariesPerMode:
+    """A recording keeps one summary per mode instead of a single one.
+
+    Switching the mode used to overwrite what was there, so the earlier summary
+    was gone for good. The file also predates this, which is why a stored
+    session with a single `summary` still has to come back usable.
+    """
+
+    def analysis(self) -> dict:
+        return {"cache_key": "k", "transcript": "текст", "masked_text": "текст",
+                "entity_map": {}, "entities": [], "segments": [], "duration_sec": 1.0,
+                "timings": {}, "cached": False}
+
+    def summary(self, preset: str, reply: str) -> dict:
+        return {"reply": reply, "reply_unmasked": reply, "llm_model": "m", "preset": preset,
+                "tokens_in": 1, "tokens_out": 1,
+                "cost": {"input": 0.0, "output": 0.0, "total": 0.0}, "timings": {}}
+
+    def test_two_modes_are_both_kept(self, client):
+        client.put("/api/sessions", json=[{
+            "id": "a", "name": "a.mp3", "createdAt": "2026-10-12T12:00:00.000Z",
+            "analysis": self.analysis(),
+            "summaries": {"agreements": self.summary("agreements", "договорились"),
+                          "brief": self.summary("brief", "кратко")},
+        }])
+        stored = client.get("/api/sessions").json()[0]
+        assert set(stored["summaries"]) == {"agreements", "brief"}
+        assert stored["summaries"]["brief"]["reply"] == "кратко"
+
+    def test_old_single_summary_becomes_its_own_mode(self, client):
+        client.put("/api/sessions", json=[{
+            "id": "a", "name": "a.mp3", "createdAt": "2026-10-12T12:00:00.000Z",
+            "analysis": self.analysis(),
+            "summary": self.summary("agreements", "договорились"),
+        }])
+        stored = client.get("/api/sessions").json()[0]
+        assert "summary" not in stored
+        assert stored["summaries"]["agreements"]["reply"] == "договорились"
+
+    def test_recording_without_a_summary_reads_as_an_empty_map(self, client):
+        client.put("/api/sessions", json=[{
+            "id": "a", "name": "a.mp3", "createdAt": "2026-10-12T12:00:00.000Z",
+            "analysis": self.analysis(), "summary": None,
+        }])
+        assert client.get("/api/sessions").json()[0]["summaries"] == {}

@@ -84,7 +84,9 @@ export interface Session {
   name: string;
   createdAt: string;
   analysis: AnalysisResult;
-  summary: SummarizeResult | null;
+  /** One entry per mode. A recording summarised three ways keeps all three:
+   *  making a second one never replaces the first. */
+  summaries: Record<string, SummarizeResult>;
 }
 
 const jsonHeaders = { "Content-Type": "application/json" };
@@ -191,6 +193,7 @@ export async function summarize(
   preset: string,
   extra?: string | null,
   maskedText?: string,
+  entityMap?: Record<string, string>,
 ): Promise<SummarizeResult> {
   const response = await request("/api/summarize", {
     method: "POST",
@@ -204,6 +207,10 @@ export async function summarize(
       // recordings: without this, re-summarising anything from the history
       // works for a while and then fails with "загрузите заново".
       masked_text: maskedText ?? "",
+      // Without the map the same request answers with [PERSON_1] where the
+      // names belong; it is only needed when the cache misses, but sending it
+      // always costs nothing.
+      entity_map: entityMap ?? {},
     }),
   });
   if (!response.ok) await toError(response);
@@ -332,7 +339,11 @@ export async function saveSessions(sessions: Session[]): Promise<void> {
  *  longer in the analysis cache, so re-running a summary on one would need the
  *  file again. The UI checks for that instead of pretending otherwise. */
 function toSession(stored: unknown): Session | null {
-  const entry = stored as Partial<Session> & { result?: ProcessResult };
+  const entry = stored as Partial<Session> & {
+    result?: ProcessResult;
+    /** Sessions written before one-summary-per-mode kept a single summary. */
+    summary?: SummarizeResult | null;
+  };
   if (!entry || typeof entry !== "object") return null;
   if (entry.analysis && typeof entry.analysis === "object") {
     return {
@@ -340,7 +351,10 @@ function toSession(stored: unknown): Session | null {
       name: entry.name ?? "Без названия",
       createdAt: entry.createdAt ?? new Date(0).toISOString(),
       analysis: entry.analysis,
-      summary: entry.summary ?? null,
+      // A session written before one-summary-per-mode arrives with a single
+      // `summary`; it becomes the entry for the mode it was made in, which is
+      // carried in the summary itself.
+      summaries: entry.summaries ?? (entry.summary ? { [entry.summary.preset ?? "decisions"]: entry.summary } : {}),
     };
   }
   const legacy = entry.result;
@@ -360,17 +374,19 @@ function toSession(stored: unknown): Session | null {
       timings: legacy.timings ?? {},
       cached: false,
     },
-    summary: legacy.reply
+    summaries: legacy.reply
       ? {
-          reply: legacy.reply,
-          reply_unmasked: legacy.reply_unmasked ?? legacy.reply,
-          llm_model: legacy.llm_model ?? "",
-          preset: null,
-          tokens_in: null,
-          tokens_out: null,
-          cost: { input: null, output: null, total: null },
-          timings: {},
+          decisions: {
+            reply: legacy.reply,
+            reply_unmasked: legacy.reply_unmasked ?? legacy.reply,
+            llm_model: legacy.llm_model ?? "",
+            preset: null,
+            tokens_in: null,
+            tokens_out: null,
+            cost: { input: null, output: null, total: null },
+            timings: {},
+          },
         }
-      : null,
+      : {},
   };
 }

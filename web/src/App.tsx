@@ -53,8 +53,9 @@ function transcriptText(analysis: AnalysisResult): string {
     .join("\n");
 }
 
-function buildReport(session: Session): string {
-  const { analysis, summary } = session;
+function buildReport(session: Session, labels: Record<string, string>): string {
+  const { analysis, summaries } = session;
+  const made = Object.entries(summaries);
   // Blocks are joined by a blank line and the empties are collapsed: filtering
   // out the nulls alone left a run of blank lines wherever a section was
   // missing, which is most of a document without a summary.
@@ -64,9 +65,13 @@ function buildReport(session: Session): string {
       `Файл: ${session.name}`,
       `Дата: ${new Date(session.createdAt).toLocaleString("ru-RU")}`,
       `Длительность: ${humanDuration(analysis.duration_sec)}`,
-      ...(summary ? [`Модель: ${summary.llm_model}`] : []),
+      ...(made.length
+        ? [`Модель: ${[...new Set(made.map(([, s]) => s.llm_model))].join(", ")}`]
+        : []),
     ],
-    ...(summary ? [["ВЫЖИМКА", summary.reply_unmasked]] : []),
+    // Every summary, each under its own mode. Picking one would leave the rest
+    // out of the file, and this file is the artefact that goes to someone else.
+    ...made.map(([mode, s]) => [`ВЫЖИМКА: ${labels[mode] ?? mode}`, s.reply_unmasked]),
     ["РАСШИФРОВКА", transcriptText(analysis)],
     // The substitution table, not the masked text itself: the table is what a
     // reader can check by hand, and the masked copy is the same length as the
@@ -121,7 +126,13 @@ function Document({
   onOpenSettings: () => void;
   busy: boolean;
 }) {
-  const { analysis, summary } = session;
+  const { analysis, summaries } = session;
+  /** The summary made in the mode currently selected, not whichever was made
+   *  last. With one entry per mode this is the whole difference between «the
+   *  summary» and «the summary you asked for». */
+  const summary = summaries[preset] ?? null;
+  /** Modes that already have one, so moving between them costs no call. */
+  const made = Object.keys(summaries);
   const speakers = useMemo(
     () => new Set(analysis.segments.map((segment) => segment.speaker)).size,
     [analysis.segments],
@@ -146,7 +157,11 @@ function Document({
   /** Recordings from before the pipeline was split have no cached analysis, so
    *  a second summary would have nothing to run on. Saying so beats offering a
    *  button that answers "анализ не найден". */
-  const canResummarise = analysis.cache_key !== "" && settings.has_key;
+  // Not `cache_key`: recordings analysed before the pipeline was split have
+  // none and never will, yet their masked text is in the session file and the
+  // endpoint reads it from there. Gating on the cache meant those recordings
+  // could only be summarised again by re-uploading and re-transcribing.
+  const canResummarise = analysis.masked_text.trim() !== "" && settings.has_key;
 
   return (
     <article
@@ -167,7 +182,14 @@ function Document({
             whoever opens the document. */}
         <p className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-slate-500">
           <span className={summary ? "text-emerald-700" : "text-slate-500"}>
-            {summary ? "С выжимкой" : "Только расшифровка"}
+            {made.length
+              ? summary
+                ? "С выжимкой"
+                : // There are summaries, just not for the mode on screen. Saying
+                  // «только расшифровка» here would be a lie the reader has no
+                  // way to disprove without opening every other mode.
+                  "Выжимка в другом режиме"
+              : "Только расшифровка"}
           </span>
           <time dateTime={session.createdAt} className="tabular-nums">
             {new Date(session.createdAt).toLocaleString("ru-RU", {
@@ -197,7 +219,10 @@ function Document({
             onClick={() =>
               downloadText(
                 `${session.name.replace(/\.[^.]+$/, "")} (расшифровка).txt`,
-                buildReport(session),
+                buildReport(
+                  session,
+                  Object.fromEntries(settings.presets.map((item) => [item.key, item.label])),
+                ),
               )
             }
           >
@@ -225,10 +250,39 @@ function Document({
         collapsed={Boolean(folded.summary)}
         onToggle={() => toggle("summary")}
         collapsedNote={
-          summary ? `${formatCount(summary.reply_unmasked.length)} знаков` : "не составлялась"
+          summary
+            ? `${formatCount(summary.reply_unmasked.length)} знаков`
+            : made.length
+              ? `составлена в другом режиме, вариантов: ${made.length}`
+              : "не составлялась"
         }
         meta={summary ? <CopyButton text={summary.reply_unmasked} /> : null}
       >
+        {/* Modes already done. Switching between them shows a summary that
+            exists instead of asking the model for a second copy of it. Out here
+            rather than under the summary, because the mode on screen is often
+            the one that has not been made yet. */}
+        {made.length > 0 ? (
+          <div className="no-print mb-5 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-slate-500">Готовые выжимки:</span>
+            {settings.presets
+              .filter((item) => made.includes(item.key))
+              .map((item) => (
+                <button
+                  key={item.key}
+                  onClick={() => onPreset(item.key)}
+                  aria-current={item.key === preset}
+                  className={
+                    item.key === preset
+                      ? "focus-ring rounded-full border border-blue-700 bg-blue-50 px-3 py-1 text-xs text-blue-800"
+                      : "focus-ring rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                  }
+                >
+                  {item.label}
+                </button>
+              ))}
+          </div>
+        ) : null}
         {summary ? (
           <>
             <Markdown text={summary.reply_unmasked} />
@@ -485,7 +539,7 @@ export default function App() {
         name: file.name,
         createdAt: new Date().toISOString(),
         analysis: result,
-        summary: null,
+        summaries: {},
       };
       setSessions((previous) => [session, ...previous].slice(0, 50));
       setCurrent(session);
@@ -524,11 +578,17 @@ export default function App() {
           // recordings: without it, re-summarising anything older answers
           // "загрузите заново" about a file that is still right there.
           session.analysis.masked_text,
+          session.analysis.entity_map,
         );
-        setSessions((previous) =>
-          previous.map((item) => (item.id === session.id ? { ...item, summary: result } : item)),
-        );
-        setCurrent((active) => (active?.id === session.id ? { ...active, summary: result } : active));
+        // Filed under the mode it was made in, so making a second summary never
+        // replaces the first. This is the whole point: switching the mode used
+        // to overwrite what was already there.
+        const filed: Session = {
+          ...session,
+          summaries: { ...session.summaries, [result.preset ?? preset]: result },
+        };
+        setSessions((previous) => previous.map((item) => (item.id === session.id ? filed : item)));
+        setCurrent((active) => (active?.id === session.id ? filed : active));
         // A summary means there is something to read, so land on the document.
         setView("document");
       } catch (caught) {
@@ -774,7 +834,7 @@ export default function App() {
                           {/* JSX drops a newline between expressions, so the
                               separator has to be written out or the row reads
                               "выжимка5 персональных данных". */}
-                          {session.summary ? "выжимка" : "без выжимки"},{" "}
+                          {Object.keys(session.summaries).length ? "выжимка" : "без выжимки"},{" "}
                           {session.analysis.entities.length}{" "}
                           {pluralRu(
                             session.analysis.entities.length,
