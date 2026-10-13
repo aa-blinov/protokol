@@ -32,12 +32,20 @@ GEOMETRY = """
   if (!i) return null;
   const bar = i.closest('div.no-print');
   const head = document.querySelector('header');
+  const rgb = (c) => {
+    const m = c.match(/\\d+/g);
+    return m ? m.slice(0, 3).map(Number).join(',') : c;
+  };
   return {
     bar: Math.round(bar.getBoundingClientRect().top),
     barPosition: getComputedStyle(bar).position,
     head: Math.round(head.getBoundingClientRect().bottom),
     fieldVisible: i.getBoundingClientRect().top >= 0 && i.getBoundingClientRect().bottom <= window.innerHeight,
     scrollY: Math.round(window.scrollY),
+    // A pinned element is painted in the colour of what it covers. The body is
+    // slate-100, and a white bar drew a pale strip across the document.
+    barBg: rgb(getComputedStyle(bar).backgroundColor),
+    pageBg: rgb(getComputedStyle(document.body).backgroundColor),
   };
 })()
 """
@@ -117,6 +125,8 @@ def main() -> int:
     print(f"  наверху страницы: панель на {top['bar']}px, низ шапки {top['head']}px, position={top['barPosition']}")
     if top["barPosition"] != "sticky":
         failures.append(f"панель не sticky, а {top['barPosition']}")
+    if top["barBg"] != top["pageBg"]:
+        failures.append(f"панель закрашена иначе, чем страница: {top['barBg']} против {top['pageBg']}")
 
     tab.js("window.scrollTo(0, document.documentElement.scrollHeight / 2)")
     time.sleep(1.0)

@@ -245,14 +245,19 @@ function Document({
       {/* Outside the document header on purpose: a sticky element travels only
           inside its own parent, and the header is 119 px tall — the bar would
           have stuck for 119 px and then scrolled away exactly as before. */}
-      <div className="no-print sticky top-[77px] z-[5] flex flex-wrap items-center gap-4 border-b border-slate-100 bg-white py-3">
+      <div className="no-print sticky top-[77px] z-[5] flex flex-wrap items-center gap-4 border-b border-slate-100 bg-paper py-3">
         {/* Pinned under the app header. A document is thirteen screens tall at
             half an hour, and a query you cannot change without scrolling back
             to the top is a query you only get to type once. The 77 px is the
             header's height, measured constant from 420 px to 1280 px by
             benchmarks/probe_header_height.py; the header is z-10, so this sits
             below it. Padding rather than margin, because a margin scrolls away
-            under a stuck element and leaves a gap content shows through. */}
+            under a stuck element and leaves a gap content shows through.
+
+            bg-paper, not bg-white: the page is slate-100, so a white bar cut a
+            pale strip across the document. bg-paper is the same colour the body
+            is painted with, in both themes, which is what a sticky element has
+            to be — the colour of whatever it covers. */}
         {/* Transcript renders its search here. In the section body it folded
             away with the section, and searching meant unfolding a dozen
             screens of text first. */}
