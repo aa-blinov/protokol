@@ -815,19 +815,23 @@ export default function App() {
 
           {settingsOpen ? (
             <section id="settings-panel" aria-label="Настройки" className="max-w-2xl">
-              <div className="mb-2 flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold tracking-tight text-slate-900">Настройки</h2>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Здесь выбирается сервис, который составит выжимку, и ключ к нему. Всё хранится на этом
-                    компьютере.
-                  </p>
-                </div>
-                <Button variant="ghost" onClick={() => setSettingsOpen(false)} ariaLabel={settingsFrom === "document" ? "Вернуться к протоколу" : "Вернуться к записям"}>
-                  <ArrowLeft aria-hidden className="h-4 w-4" />
-                  {settingsFrom === "document" ? "К протоколу" : "К записям"}
-                </Button>
-              </div>
+              {/* Назад — слева и над заголовком, как в браузере, почте и любом
+                  мастере настроек. Кнопка в правом углу читалась как ещё одно
+                  действие рядом с формой, а навигация должна читаться как
+                  навигация: мелко, приглушённо, над тем, куда возвращают. */}
+              <button
+                onClick={() => setSettingsOpen(false)}
+                aria-label={settingsFrom === "document" ? "Вернуться к протоколу" : "Вернуться к записям"}
+                className="focus-ring -ml-1 mb-3 inline-flex items-center gap-1.5 rounded text-sm text-slate-500 hover:text-slate-900"
+              >
+                <ArrowLeft aria-hidden className="h-4 w-4" />
+                {settingsFrom === "document" ? "К протоколу" : "К записям"}
+              </button>
+              <h2 className="text-lg font-semibold tracking-tight text-slate-900">Настройки</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Здесь выбирается сервис, который составит выжимку, и ключ к нему. Всё хранится на этом
+                компьютере.
+              </p>
               <SettingsPanel
                 onSaved={(saved) => {
                   setSettings(saved);
