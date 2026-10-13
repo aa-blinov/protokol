@@ -64,6 +64,11 @@ export function Review({
         <ShieldCheck aria-hidden className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
         <div className="text-sm">
           <p className="font-medium text-emerald-900">Расшифровка готова. Пока ничего не отправлено</p>
+          {analysis.cached ? (
+            <p className="mt-1 text-emerald-800">
+              Эту запись мы уже разбирали раньше, поэтому показываем сохранённую расшифровку — заново не слушали.
+            </p>
+          ) : null}
           <p className="mt-1 text-emerald-800">
             {tokens > 0
               ? `Скрыто ${formatCount(tokens)} ${pluralRu(tokens, "значение", "значения", "значений")}: имена, телефоны, адреса, номера.`

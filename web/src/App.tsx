@@ -366,6 +366,10 @@ export default function App() {
   );
   const inputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
+  const viewRef = useRef<View>(view);
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
   const listRef = useRef<HTMLUListElement>(null);
 
   // A ticking clock for the current run. Ticks once a second, which is also
@@ -433,9 +437,15 @@ export default function App() {
 
   /** Drop a file: transcribe, mask, then stop and show what would be sent. */
   const analyse = useCallback(async (file: File) => {
+    const previousView = viewRef.current;
     setError(null);
     setWorkingOn(file.name);
     setBusy("analysing");
+    // Возврат к экрану разбора нужен сразу. Оба его состояния — идущий разбор
+    // и пустой экран — отрисованы только при view === "empty". Когда новый файл
+    // выбирают из документа, view оставался "document" весь разбор, и человек
+    // видел старый протокол до самой секунды появления выжимки.
+    setView("empty");
     setProgress({ stage: "transcribe", pct: 0, message: "Загрузка файла" });
     try {
       const result: AnalysisResult = await analyseAudio(file, (event) => {
@@ -459,9 +469,9 @@ export default function App() {
       // The failed file is not the session on screen — drop that stale result,
       // otherwise the error reads as belonging to the document below it.
       fail(caught instanceof Error ? caught.message : String(caught));
-      // Документ, который уже открыт, не трогаем: неудавшийся файл к нему
-      // отношения не имеет, и человек терял бы место без причины.
-      if (view === "empty") setCurrent(null);
+      // Неудавшийся файл к открытому документу отношения не имеет: возвращаемся
+      // туда, откуда начали, иначе человек теряет место без причины.
+      setView(previousView);
     } finally {
       setBusy("none");
       setProgress(null);
@@ -587,6 +597,13 @@ export default function App() {
   const visibleSessions = query
     ? sessions.filter((session) => session.name.toLowerCase().includes(query.trim().toLowerCase()))
     : sessions;
+  // Смена экрана должна возвращать к началу. Иначе: читаете длинный протокол,
+  // жмёте «Новая запись», выбираете файл — контент наверху меняется, а
+  // прокрутка остаётся там, где была, и кажется, что ничего не произошло.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [view, busy === "analysing"]);
+
   // Открытая запись всегда должна быть в поле зрения: переход к ней может
   // прийти не из списка, и прокручивать его руками не должен никто.
   useEffect(() => {
