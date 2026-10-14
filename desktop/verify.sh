@@ -73,10 +73,12 @@ if [ -f "$RESOURCES/web/index.html" ]; then ok "веб-интерфейс упа
 section "Модели ($MODELS_DIR)"
 MISSING=0
 for f in \
-  "gigaam/v3_e2e_ctc.int8.onnx" \
-  "gigaam/v3_e2e_ctc_vocab.txt" \
+  "gigaam/v3_e2e_rnnt_encoder.int8.onnx" \
+  "gigaam/v3_e2e_rnnt_decoder.int8.onnx" \
+  "gigaam/v3_e2e_rnnt_joint.int8.onnx" \
+  "gigaam/v3_e2e_rnnt_vocab.txt" \
   "gigaam/config.json" \
-  "rubert-pii/model.optimized.fp32.onnx" \
+  "rubert-pii/model.optimized.fp16.onnx" \
   "rubert-pii/config.json" \
   "rubert-pii/tokenizer.json"
 do
@@ -301,6 +303,21 @@ if [ -x "$EXE" ] && [ -f "$ROOT/benchmarks/check_controls.py" ]; then
   fi
 else
   note "проверка полей пропущена: нет $ROOT/benchmarks/check_controls.py"
+fi
+
+# Левая панель истории закреплена при прокрутке длинного документа на широком экране. Отдельная
+# проверка: аудит видит вёрстку только в покое, а закрепление проявляется при прокрутке.
+if [ -x "$EXE" ] && [ -f "$ROOT/benchmarks/check_rail_pinned.py" ]; then
+  RAIL_OUT="$(python3 "$ROOT/benchmarks/check_rail_pinned.py" "http://127.0.0.1:$PORT" 2>&1)"
+  RAIL_RC=$?
+  echo "$RAIL_OUT" | sed 's/^/  /'
+  if [ "$RAIL_RC" -eq 0 ]; then
+    ok "история закреплена при прокрутке, на узком экране не закрепляется"
+  else
+    bad "панель истории не закрепляется или закрывает документ"
+  fi
+else
+  note "проверка панели истории пропущена: нет $ROOT/benchmarks/check_rail_pinned.py"
 fi
 
 kill "$SRV" 2>/dev/null

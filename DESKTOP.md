@@ -86,11 +86,13 @@ macOS. Свой интерпретатор можно подставить че�
 ```
 resources/
 ├── models/
-│   ├── gigaam/        v3_e2e_ctc.onnx + vocab + config
-│   └── rubert-pii/    model.optimized.fp32.onnx + tokenizer + config
+│   ├── gigaam/        v3_e2e_rnnt_*.int8.onnx + vocab + config
+│   └── rubert-pii/    model.optimized.fp16.onnx + tokenizer + config
 ├── sidecar/sttshka-api/   сайдкар (PyInstaller onedir) + _internal
 └── web/                   собранный веб-интерфейс
 ```
+
+Авторы и лицензии моделей перечислены в README, в разделе «Модели и лицензии».
 
 Из-за этого модели обязаны быть на месте **до** сборки: `./desktop/build.sh`
 падает с понятной ошибкой и ссылкой на `./download_models.sh`, если чего-то не
