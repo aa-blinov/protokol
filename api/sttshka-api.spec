@@ -11,7 +11,7 @@ datas, binaries, hiddenimports = [], [], []
 
 # onnxruntime ships native libraries and transformer/tokenizer data files that
 # static analysis of our imports cannot see; collect them wholesale.
-for package in ("onnxruntime", "onnx_asr", "transformers", "tokenizers", "av"):
+for package in ("onnxruntime", "onnx_asr", "transformers", "tokenizers", "av", "pymorphy3", "pymorphy3_dicts_ru"):
     package_datas, package_binaries, package_hidden = collect_all(package)
     datas += package_datas
     binaries += package_binaries

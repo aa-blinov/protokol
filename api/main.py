@@ -24,10 +24,10 @@ import schemas
 from dialogue import assign_words_to_turns, build_dialogue
 from diarization import Diarizer
 from llm import DEFAULT_MODEL, PRESET_LABELS, LlmError, OpenRouterClient
-from masking import mask, unmask
+from masking import UnboundRequirement, bind_requirements, mask, unknown_tokens, unmask
 from ner import PiiNer
 import settings
-from rules import fill_gaps, find_candidates
+from rules import fill_gaps, fill_word_gaps, find_candidates, find_word_candidates, relabel_by_name
 from stt import TARGET_SAMPLE_RATE, Stt
 
 log = logging.getLogger("sttshka")
@@ -123,10 +123,36 @@ def _spans(text: str) -> list:
     rule span and a model span landing on the same number under different labels
     scored as both a hit and a miss. Now `fill_gaps` keeps only the parts a rule
     covers that the model did not, so the model keeps its own label where it was
-    right and the rules complete it where it was not.
+    right and the rules complete it where it was not. A model span that names another
+    identifier than the words before it ("СНИЛС" followed by a number the model called
+    OMS) keeps its place and gets the label the name asks for.
     """
-    model_spans = get_ner().predict(text)
-    return model_spans + fill_gaps(text, model_spans, find_candidates(text))
+    model_spans = relabel_by_name(text, get_ner().predict(text))
+    return (
+        model_spans
+        + fill_gaps(text, model_spans, find_candidates(text))
+        + fill_word_gaps(text, model_spans, find_word_candidates(text))
+    )
+
+
+def _bound_requirements(extra: str, entity_map: dict[str, str]) -> str:
+    """The user's requirement, with personal data swapped for this recording's tokens.
+
+    Refused rather than sent when it names someone or something the recording does
+    not hold. The requirement is text the model reads, so it follows the same rule
+    as the transcript: a name reaches the model only as a token.
+    """
+    if not extra.strip():
+        return ""
+    try:
+        return bind_requirements(extra, _spans(extra), entity_map)
+    except UnboundRequirement as error:
+        listed = ", ".join(f"«{surface}»" for surface in error.surfaces)
+        raise HTTPException(
+            422,
+            f"В требованиях к выжимке есть личные данные, которых нет в этой записи: {listed}. "
+            "Уберите их или опишите роль, например «заказчик».",
+        ) from error
 
 
 def _settings_state() -> schemas.SettingsState:
@@ -254,7 +280,7 @@ def list_models() -> list[schemas.ModelInfo]:
 def health() -> dict:
     return {
         "stt": (config.GIGAAM_DIR / "config.json").is_file(),
-        "ner": (config.PII_NER_DIR / "model.optimized.fp32.onnx").is_file(),
+        "ner": (config.PII_NER_DIR / "model.optimized.fp16.onnx").is_file(),
         "diarization": (config.DIARIZATION_SEG_DIR / "model.onnx").is_file()
         and config.DIARIZATION_EMB_PATH.is_file(),
         "llm_configured": bool(settings.current_key()),
@@ -288,28 +314,6 @@ def mask_text(request: schemas.MaskRequest) -> schemas.MaskResponse:
         masked_text=result.masked_text,
         entity_map=result.entity_map,
         entities=_entities_out(result),
-    )
-
-
-@app.post("/api/llm", response_model=schemas.LLMResponse)
-def llm_complete(request: schemas.LLMRequest) -> schemas.LLMResponse:
-    """A single completion over text the caller has already masked.
-
-    Kept for the pipeline tests and for scripting; the app itself goes through
-    /api/analyse then /api/summarize. Named `llm_complete` rather than `llm`
-    because a function of that name shadows the `llm` module for the whole
-    file -- which silently broke every `llm.exact_cost` call below.
-    """
-    try:
-        result = get_llm().complete(request.masked_text, request.model)
-    except LlmError as error:
-        raise HTTPException(502, str(error)) from error
-    return schemas.LLMResponse(
-        reply=result.reply,
-        reply_unmasked=unmask(result.reply, request.entity_map),
-        model=result.model,
-        tokens_in=result.tokens_in,
-        tokens_out=result.tokens_out,
     )
 
 
@@ -462,14 +466,13 @@ def summarize(request: schemas.SummarizeRequest) -> schemas.SummarizeResult:
         )
     entity_map = (cached or {}).get("entity_map") or request.entity_map or {}
     preset = request.preset or settings.current_preset()
+    extra = _bound_requirements(
+        settings.current_extra() if request.extra is None else request.extra,
+        entity_map,
+    )
     started = time.perf_counter()
     try:
-        result = get_llm().complete_meeting(
-            masked_text,
-            request.model,
-            preset,
-            settings.current_extra() if request.extra is None else request.extra,
-        )
+        result = get_llm().complete_meeting(masked_text, request.model, preset, extra)
     except LlmError as error:
         raise HTTPException(502, str(error)) from error
     elapsed = round(time.perf_counter() - started, 2)
@@ -479,6 +482,10 @@ def summarize(request: schemas.SummarizeRequest) -> schemas.SummarizeResult:
         _price_of(request.model, "prompt"),
         _price_of(request.model, "completion"),
     )
+    warnings = [
+        f"В ответе модели есть метка {token}, которой нет в этой записи. Она осталась в тексте как есть."
+        for token in unknown_tokens(result.reply, entity_map)
+    ]
     return schemas.SummarizeResult(
         reply=result.reply,
         reply_unmasked=unmask(result.reply, entity_map),
@@ -488,6 +495,7 @@ def summarize(request: schemas.SummarizeRequest) -> schemas.SummarizeResult:
         tokens_out=result.tokens_out,
         cost=cost,
         timings={"llm": elapsed},
+        warnings=warnings,
     )
 
 
@@ -609,13 +617,18 @@ async def process(
             result = mask(text, _spans(text))
             timings["mask"] = round(time.perf_counter() - started, 2)
 
+            try:
+                extra = _bound_requirements(settings.current_extra(), result.entity_map)
+            except HTTPException as error:
+                yield _line("error", 100, str(error.detail))
+                return
             started = time.perf_counter()
             yield _line("llm", 70, f"Запрос к {llm_model}")
             completion = get_llm().complete_meeting(
                 result.masked_text,
                 llm_model,
                 settings.current_preset(),
-                settings.current_extra(),
+                extra,
             )
             timings["llm"] = round(time.perf_counter() - started, 2)
 

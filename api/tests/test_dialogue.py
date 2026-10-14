@@ -68,7 +68,7 @@ def _client_with_fake_complete() -> tuple[OpenRouterClient, list[tuple[str, str]
     client = OpenRouterClient("test-key")
     calls: list[tuple[str, str]] = []
 
-    def fake(masked_text: str, model: str = DEFAULT_MODEL, prompt: str | None = None, system: str = SYSTEM_PROMPT):
+    def fake(masked_text: str, model: str = DEFAULT_MODEL, prompt: str | None = None, system: str = SYSTEM_PROMPT, **options):
         calls.append((system, masked_text))
         return LlmResult(reply=f"part-{len(masked_text)}", model=model, tokens_in=None, tokens_out=None)
 

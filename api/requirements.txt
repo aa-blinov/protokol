@@ -14,3 +14,9 @@ numpy>=1.26,<3
 # Audio decoding. PyAV embeds the FFmpeg libraries in its wheel, so the decoder
 # is packed into the PyInstaller bundle and no system `ffmpeg` is needed.
 av>=13.0
+
+# Russian morphology for person names: one identity per person, and the case a
+# name is restored in. The dictionaries ship as a separate package and must be
+# collected into the PyInstaller bundle too (see sttshka-api.spec).
+pymorphy3>=2.0.6
+pymorphy3-dicts-ru>=2.4.417150.4580142

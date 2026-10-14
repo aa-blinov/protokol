@@ -1,10 +1,10 @@
 """Speech to text via GigaAM-v3 ONNX (``onnx-asr``).
 
-Uses the ``e2e`` variant: unlike plain ``v3-ctc`` it adds punctuation *and*
+Uses the ``e2e`` RNN-T variant: unlike the plain v3 heads it adds punctuation *and*
 normalises dictated digits ("восемь девятьсот..." -> "8 912..."), which is what
-lets the PII model recognise phone, passport and INN numbers at all. With the
-plain CTC model those numbers reach OpenRouter unmasked, so this choice is a
-privacy requirement, not a quality preference.
+lets the PII model recognise phone, passport and INN numbers at all. With a plain
+head those numbers reach OpenRouter unmasked, so this choice is a privacy
+requirement, not a quality preference.
 
 Uploaded audio can be any container or codec, so it is decoded to 16 kHz mono
 PCM with PyAV before inference — the model only accepts 16 kHz PCM. PyAV is used
@@ -17,12 +17,14 @@ as an array: ``onnx_asr`` does not renormalise arrays, so passing samples would
 mean reproducing its int16->float32 scaling exactly to avoid silently degrading
 accuracy. Letting it read the WAV keeps that step in its hands.
 
-Long audio is split first. GigaAM's ONNX graph is exported with a fixed
-attention span: somewhere past ~200 s the encoder raises an ONNX broadcast
-error instead of transcribing (measured: 180 s fine, 210 s fails), so a meeting
-cannot be handed over in one call. Chunks are cut at the quietest frame near
-the limit rather than on a fixed grid, so a cut rarely lands mid-word. The cap
-stays well under the model limit to leave margin across quantizations.
+Long audio is split first, into chunks of at most ``SEGMENT_MAX_SECONDS``. The
+RNN-T head is trained on short utterances; its model card limits it to about 25 s.
+Measured on an 8-minute interview, 120 s chunks recognised 904 words where 20 s
+and 25 s chunks recognised 1051 and 1053: the long chunks silently lose speech.
+The CTC head lost words at 120 s as well (1011 against 1059 at 20 s), and on a
+labelled dialogue its error rate went from 4.35% at 20 s to 5.83% at 120 s.
+Chunks are cut at the quietest frame near the limit rather than on a fixed grid,
+so a cut rarely lands mid-word.
 """
 
 from __future__ import annotations
@@ -40,16 +42,18 @@ from av.error import FFmpegError
 import config
 from dialogue import Word, words_from_timed_text
 
-MODEL_NAME = "gigaam-v3-e2e-ctc"
+MODEL_NAME = "gigaam-v3-e2e-rnnt"
 # int8 weights: on our tests the same accuracy as fp32 (0% WER clean, +0.8 pp at
 # 0 dB noise — one word in 122), but the model loads ~0.5 GB lighter (225 MB on
 # disk vs 845 MB) and the bundle shrinks with it. On a 16 GB laptop that matters.
 QUANTIZATION = "int8"
 TARGET_SAMPLE_RATE = 16_000
 
-# The model's own ceiling is ~200 s (see the module docstring); 120 s keeps a
-# wide margin and still gives each chunk plenty of context.
-SEGMENT_MAX_SECONDS = 120.0
+# Chunk ceiling for either head. The RNN-T model card limits it to about 25 s, and
+# 120 s chunks lost about 14% of the words on a real interview (see the module
+# docstring). 20 s keeps a margin under that limit; 25 s and 20 s scored the same
+# within noise.
+SEGMENT_MAX_SECONDS = 20.0
 _FRAME_MS = 20
 _HOP_MS = 10
 
@@ -74,6 +78,7 @@ class Stt:
         # Same weights, but returning time per token — used to attribute words to
         # speaker turns instead of transcribing each turn blind.
         self._timestamps = self.model.with_timestamps()
+
 
     def transcribe(self, audio: bytes, suffix: str = ".wav") -> tuple[str, float]:
         """Return ``(text, duration_seconds)`` for raw audio bytes.
