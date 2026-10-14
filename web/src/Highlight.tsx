@@ -17,6 +17,8 @@ const KNOWN_TYPES = new Set([
   "DRIVER_LICENSE",
   "MILITARY_ID",
   "BIRTH_CERTIFICATE",
+  "OGRNIP",
+  "SECRET",
 ]);
 
 export const chipClass = (type: string) => `chip ${KNOWN_TYPES.has(type) ? `chip-${type}` : "chip-OTHER"}`;
@@ -118,7 +120,7 @@ export function Highlighted({
 }) {
   const pieces = split(text, entities, hits);
   return (
-    <p className="whitespace-pre-wrap leading-7 text-slate-800">
+    <p className="whitespace-pre-wrap leading-7 text-stone-800">
       {pieces.map((piece, index) => {
         if (piece.entity) {
           return (
@@ -150,11 +152,12 @@ export function Highlighted({
 
 /** Renders already-masked text, turning [TOKEN] into chips. */
 export function MaskedView({ text, entityMap }: { text: string; entityMap: Record<string, string> }) {
-  const parts = text.split(/(\[[A-Z_]+_\d+\])/g);
+  // A token may carry a case tag the model added: [PERSON_1|gen]. The chip shows the token alone.
+  const parts = text.split(/(\[[A-Z_]+_\d+(?:\|[a-z]+)?\])/g);
   return (
-    <p className="whitespace-pre-wrap leading-7 text-slate-800">
+    <p className="whitespace-pre-wrap leading-7 text-stone-800">
       {parts.map((part, index) => {
-        const match = part.match(/^\[([A-Z_]+_\d+)\]$/);
+        const match = part.match(/^\[([A-Z_]+_\d+)(?:\|[a-z]+)?\]$/);
         if (!match) return <span key={index}>{part}</span>;
         const token = match[1];
         const type = token.replace(/_\d+$/, "");

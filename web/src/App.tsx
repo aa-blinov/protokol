@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   analyseAudio,
   getSettings,
@@ -97,13 +97,15 @@ function downloadText(filename: string, text: string): void {
   URL.revokeObjectURL(url);
 }
 
-/** The product mark — same shape as the app icon and favicon. */
+/** The product mark: a page with one line redacted. Same shape as the app icon and favicon. */
 function Mark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" className={className} role="img" aria-label={PRODUCT_NAME}>
-      <rect width="32" height="32" rx="7" fill="#1d4ed8" />
-      <rect x="7" y="11" width="18" height="3.5" rx="1.75" fill="#ffffff" />
-      <rect x="7" y="17.5" width="11" height="3.5" rx="1.75" fill="#ffffff" opacity="0.72" />
+      <rect width="32" height="32" rx="7" fill="#1f5a46" />
+      <rect x="8" y="6" width="16" height="20" rx="2" fill="#faf8f3" />
+      <rect x="11" y="11" width="10" height="2" rx="1" fill="#a29b8a" />
+      <rect x="11" y="15" width="7" height="2" rx="1" fill="#a29b8a" />
+      <rect x="11" y="19" width="10" height="3" rx="0.5" fill="#10332a" />
     </svg>
   );
 }
@@ -113,6 +115,8 @@ function Document({
   session,
   settings,
   preset,
+  mode,
+  onMode,
   onPreset,
   onResummarise,
   onOpenSettings,
@@ -120,19 +124,25 @@ function Document({
 }: {
   session: Session;
   settings: SettingsState;
+  /** The mode the compose form will run next. Choosing it does not change the summary on screen. */
   preset: string;
+  /** The mode whose summary is on screen, picked with the mode chips. */
+  mode: string | null;
+  onMode: (mode: string) => void;
   onPreset: (preset: string) => void;
-  onResummarise: () => void;
+  /** Resolves true when the summary was made, so the compose form can close. */
+  onResummarise: () => Promise<boolean>;
   onOpenSettings: () => void;
   busy: boolean;
 }) {
   const { analysis, summaries } = session;
-  /** The summary made in the mode currently selected, not whichever was made
-   *  last. With one entry per mode this is the whole difference between «the
-   *  summary» and «the summary you asked for». */
-  const summary = summaries[preset] ?? null;
   /** Modes that already have one, so moving between them costs no call. */
   const made = Object.keys(summaries);
+  /** The mode on screen: the one the reader picked, else the settings' mode if it has a summary,
+   *  else the latest one made. Choosing a mode in the compose form never changes it. */
+  const shown = mode && made.includes(mode) ? mode : made.includes(preset) ? preset : (made[made.length - 1] ?? preset);
+  /** The summary of the mode on screen. It disappears only when that mode is left unmade. */
+  const summary = summaries[shown] ?? null;
   const speakers = useMemo(
     () => new Set(analysis.segments.map((segment) => segment.speaker)).size,
     [analysis.segments],
@@ -202,13 +212,13 @@ function Document({
       }}
     >
       <header>
-        <h2 className="break-words text-2xl font-semibold tracking-tight text-slate-900">{session.name}</h2>
+        <h2 className="break-words text-2xl font-semibold tracking-tight text-stone-900">{session.name}</h2>
         {/* Metadata is separated by space, not by dots: a row of · reads as
             decoration. The model id is left out entirely — it belongs to the
             settings screen, and "deepseek/deepseek-v4.1-flash" means nothing to
             whoever opens the document. */}
-        <p className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-slate-500">
-          <span className={summary ? "text-emerald-700" : "text-slate-500"}>
+        <p className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-stone-500">
+          <span className={summary ? "text-accent-700" : "text-stone-500"}>
             {made.length
               ? summary
                 ? "С выжимкой"
@@ -245,16 +255,16 @@ function Document({
       {/* Outside the document header on purpose: a sticky element travels only
           inside its own parent, and the header is 119 px tall — the bar would
           have stuck for 119 px and then scrolled away exactly as before. */}
-      <div className="no-print sticky top-[77px] z-[5] flex flex-wrap items-center gap-4 border-b border-slate-100 bg-paper py-3">
+      <div style={{ top: "var(--header-h, 69px)" }} className="no-print sticky z-[5] flex flex-wrap items-center gap-4 border-b border-stone-100 bg-paper py-3">
         {/* Pinned under the app header. A document is thirteen screens tall at
             half an hour, and a query you cannot change without scrolling back
-            to the top is a query you only get to type once. The 77 px is the
-            header's height, measured constant from 420 px to 1280 px by
-            benchmarks/probe_header_height.py; the header is z-10, so this sits
-            below it. Padding rather than margin, because a margin scrolls away
+            to the top is a query you only get to type once. Its top is the
+            header's measured height, written to --header-h by App at runtime: the header
+            follows its buttons, and it has already moved once. The header is z-10, so this
+            sits below it. Padding rather than margin, because a margin scrolls away
             under a stuck element and leaves a gap content shows through.
 
-            bg-paper, not bg-white: the page is slate-100, so a white bar cut a
+            bg-paper, not bg-sheet: the page is stone-100, so a white bar cut a
             pale strip across the document. bg-paper is the same colour the body
             is painted with, in both themes, which is what a sticky element has
             to be — the colour of whatever it covers. */}
@@ -319,39 +329,59 @@ function Document({
         }
         meta={summary ? <CopyButton text={summary.reply_unmasked} /> : null}
       >
-        {/* Modes already done. Switching between them shows a summary that
-            exists instead of asking the model for a second copy of it. Out here
-            rather than under the summary, because the mode on screen is often
-            the one that has not been made yet. */}
-        {made.length > 0 ? (
+        {/* One chip per mode, so every summary stays reachable: a made mode shows its
+            own result, an unmade one opens the compose form for that mode. The form
+            does not change what is on screen until its summary exists. Out here
+            rather than under the summary, because the mode on screen is often the
+            one that has not been made yet. */}
+        {settings.presets.length > 0 ? (
           <div className="no-print mb-5 flex flex-wrap items-center gap-2">
-            <span className="text-xs text-slate-500">Готовые выжимки:</span>
-            {settings.presets
-              .filter((item) => made.includes(item.key))
-              .map((item) => (
+            <span className="text-xs text-stone-500">Выжимки по режимам:</span>
+            {settings.presets.map((item) => {
+              const done = made.includes(item.key);
+              const active = item.key === shown;
+              return (
                 <button
                   key={item.key}
-                  onClick={() => onPreset(item.key)}
-                  aria-current={item.key === preset}
+                  onClick={() => {
+                    if (done) {
+                      onMode(item.key);
+                    } else {
+                      onPreset(item.key);
+                      setRedoOpen(true);
+                    }
+                  }}
+                  aria-current={active}
+                  title={done ? undefined : "Выжимка в этом режиме ещё не составлена"}
                   className={
-                    item.key === preset
-                      ? "focus-ring rounded-full border border-blue-700 bg-blue-50 px-3 py-1 text-xs text-blue-800"
-                      : "focus-ring rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                    active
+                      ? "focus-ring rounded-full border border-accent-700 bg-accent-50 px-3 py-1 text-xs text-accent-800"
+                      : done
+                        ? "focus-ring rounded-full border border-stone-300 px-3 py-1 text-xs text-stone-600 hover:bg-stone-50"
+                        : "focus-ring rounded-full border border-dashed border-stone-300 px-3 py-1 text-xs text-stone-500 hover:bg-stone-50"
                   }
                 >
                   {item.label}
                 </button>
-              ))}
+              );
+            })}
           </div>
         ) : null}
         {summary ? (
           <>
+            {summary.warnings?.length ? (
+              <ul className="mb-4 space-y-1 border border-stone-300 bg-stone-50 px-3 py-2 text-sm text-stone-700">
+                {summary.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : null}
             <Markdown text={summary.reply_unmasked} />
-            <div className="no-print mt-5 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-slate-100 pt-3">
+            <div className="no-print mt-5 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-stone-100 pt-3">
               <button
                 onClick={() => setRedoOpen((open) => !open)}
                 aria-expanded={redoOpen}
-                className="focus-ring flex items-center gap-1.5 rounded text-xs text-blue-700 underline"
+                className="focus-ring flex items-center gap-1.5 rounded text-xs text-accent-700 underline"
               >
                 <RefreshCw aria-hidden className="h-3.5 w-3.5" />
                 Изменить выжимку
@@ -373,7 +403,9 @@ function Document({
                   busy={busy}
                   canRun={canResummarise}
                   runLabel="Составить выжимку"
-                  onRun={onResummarise}
+                  onRun={async () => {
+                    if (await onResummarise()) setRedoOpen(false);
+                  }}
                   onOpenSettings={onOpenSettings}
                   onClose={() => setRedoOpen(false)}
                   closeLabel="Оставить как есть"
@@ -381,10 +413,10 @@ function Document({
               ) : null}
             </div>
             <details className="no-print mt-4">
-              <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">
+              <summary className="cursor-pointer text-xs text-stone-500 hover:text-stone-700">
                 Что модель увидела вместо имён
               </summary>
-              <div className="mt-3 max-w-[68ch] rounded border border-slate-200 bg-slate-50 p-3 text-[13px] leading-6 text-slate-600">
+              <div className="mt-3 max-w-[68ch] rounded border border-stone-200 bg-stone-50 p-3 text-[13px] leading-6 text-stone-600">
                 <MaskedView text={summary.reply} entityMap={analysis.entity_map} />
               </div>
             </details>
@@ -398,14 +430,16 @@ function Document({
             busy={busy}
             canRun={canResummarise}
             runLabel="Составить выжимку"
-            onRun={onResummarise}
+            onRun={async () => {
+              if (await onResummarise()) setRedoOpen(false);
+            }}
             onOpenSettings={onOpenSettings}
             onClose={() => setRedoOpen(false)}
             closeLabel="Оставить только расшифровку"
           />
         ) : (
           <div className="max-w-xl">
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-stone-600">
               Вы остановились на расшифровке. Выжимку не отправляли, деньги не потрачены.
             </p>
             <div className="no-print mt-4 flex flex-wrap items-center gap-4">
@@ -413,7 +447,7 @@ function Document({
                 Составить выжимку
               </Button>
               {!canResummarise ? (
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-stone-500">
                   Готовой расшифровки от прошлого раза не осталось, поэтому составить выжимку можно будет
                   только после повторной загрузки файла.
                 </p>
@@ -442,20 +476,20 @@ function Document({
         {/* One level of folding, not two. The section already collapses; a
             separate "показать целиком" inside it meant three states for what is
             really one decision. */}
-        <div className="max-h-[30rem] max-w-[68ch] overflow-y-auto text-[15px] leading-7 text-slate-800">
+        <div className="max-h-[30rem] max-w-[68ch] overflow-y-auto text-[15px] leading-7 text-stone-800">
           <MaskedView text={analysis.masked_text} entityMap={analysis.entity_map} />
         </div>
 
         {tokens > 0 ? (
           <details className="no-print mt-4">
-            <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">
+            <summary className="cursor-pointer text-xs text-stone-500 hover:text-stone-700">
               Таблица подстановок
             </summary>
             <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
               {Object.entries(analysis.entity_map).map(([token, value]) => (
                 <li key={token} className="flex items-baseline gap-2 text-xs">
                   <span className={chipClass(token.replace(/_\d+$/, ""))}>{token}</span>
-                  <span className="font-mono text-slate-600">{value}</span>
+                  <span className="font-mono text-stone-600">{value}</span>
                 </li>
               ))}
             </ul>
@@ -484,6 +518,10 @@ export default function App() {
   const [dragging, setDragging] = useState(false);
   const [settings, setSettings] = useState<SettingsState | null>(null);
   const [preset, setPreset] = useState("");
+  /** The mode whose summary is on screen for the open recording; null means the default choice. */
+  const [shownMode, setShownMode] = useState<string | null>(null);
+  // Another recording starts from its own default, not from the mode last looked at.
+  useEffect(() => setShownMode(null), [current?.id]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** Откуда открыли настройки: из пустого экрана, из истории или из протокола. */
   const [settingsFrom, setSettingsFrom] = useState<"empty" | "document">("empty");
@@ -507,6 +545,19 @@ export default function App() {
     localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light",
   );
   const inputRef = useRef<HTMLInputElement>(null);
+  // The bar under the header sticks at the header's bottom edge. The edge is measured, not
+  // assumed: the header follows its buttons and title, and it has already moved from 77 px to 69 px.
+  const headerRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const measure = () =>
+      document.documentElement.style.setProperty("--header-h", `${header.getBoundingClientRect().height}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
   const dragDepth = useRef(0);
   const viewRef = useRef<View>(view);
   useEffect(() => {
@@ -625,7 +676,7 @@ export default function App() {
   /** Ask for the summary over the analysis already in hand. */
   const runSummary = useCallback(
     async (session: Session) => {
-      if (!settings) return;
+      if (!settings) return false;
       setError(null);
       setBusy("summarising");
       setWorkingOn(session.name);
@@ -649,11 +700,16 @@ export default function App() {
           summaries: { ...session.summaries, [result.preset ?? preset]: result },
         };
         setSessions((previous) => previous.map((item) => (item.id === session.id ? filed : item)));
+        // The screen moves to the summary just made; the others stay under their own chips.
+        setShownMode(result.preset ?? preset);
         setCurrent((active) => (active?.id === session.id ? filed : active));
         // A summary means there is something to read, so land on the document.
         setView("document");
+        // Tells the caller the summary is made, so its compose form can close.
+        return true;
       } catch (caught) {
         fail(caught instanceof Error ? caught.message : String(caught));
+        return false;
       } finally {
         setBusy("none");
         setWorkingOn(null);
@@ -766,14 +822,31 @@ export default function App() {
 
   return (
     <div className="min-h-full">
-      <header className="no-print sticky top-0 z-10 border-b border-slate-200 bg-white">
+      <header ref={headerRef} className="no-print sticky top-0 z-10 border-b border-stone-200 bg-sheet">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 py-4">
           <Mark className="h-7 w-7 shrink-0" />
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight text-slate-900">{PRODUCT_NAME}</h1>
-            <p className="text-xs text-slate-500">Приватная расшифровка встреч</p>
+            <h1 className="text-lg font-semibold tracking-tight text-stone-900">{PRODUCT_NAME}</h1>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => inputRef.current?.click()}
+              disabled={busy !== "none"}
+              ariaLabel="Новая запись"
+              className="gap-1.5"
+            >
+              <Plus aria-hidden className="h-4 w-4" />
+              <span className="hidden sm:inline">Новая запись</span>
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => (settingsOpen ? setSettingsOpen(false) : openSettings())}
+              ariaLabel="Настройки"
+              ariaExpanded={settingsOpen}
+            >
+              <SettingsIcon aria-hidden className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               onClick={() => setTheme((value) => (value === "dark" ? "light" : "dark"))}
@@ -790,16 +863,10 @@ export default function App() {
       </header>
 
       <div className="mx-auto grid max-w-5xl grid-cols-1 gap-x-10 gap-y-8 px-6 py-8 lg:grid-cols-[200px_1fr] print:grid-cols-1">
-        <aside className="no-print order-2 self-start lg:order-1">
-          {/* The collection owns "new". A header action inside one document is
-              object-scoped by convention and cannot be found from any other
-              screen, so the only reliable place for the app's primary action is
-              here, where it is always in the same spot. */}
-          <Button onClick={() => inputRef.current?.click()} disabled={busy !== "none"} className="w-full">
-            <Plus aria-hidden className="h-4 w-4" />
-            Новая запись
-          </Button>
-          <h2 className="mt-7 font-mono text-[12px] font-medium uppercase tracking-[0.12em] text-slate-500">
+        <aside className="rail no-print order-2 self-start lg:order-1">
+          {/* "New" and "Settings" are app-level, so they sit in the header, which
+              stays on screen at every width. The rail is only the history. */}
+          <h2 className="font-mono text-[12px] font-medium uppercase tracking-[0.12em] text-stone-500">
             История
           </h2>
           {sessions.length > 0 ? (
@@ -808,13 +875,13 @@ export default function App() {
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Поиск"
               aria-label="Поиск по истории"
-              className={`${FIELD} mt-3 w-full text-sm placeholder:text-slate-500`}
+              className={`${FIELD} mt-3 w-full text-sm placeholder:text-stone-500`}
             />
           ) : null}
           {sessions.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">Здесь появятся обработанные записи</p>
+            <p className="mt-3 text-sm text-stone-500">Здесь появятся обработанные записи</p>
           ) : visibleSessions.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">Нет записей с таким названием</p>
+            <p className="mt-3 text-sm text-stone-500">Нет записей с таким названием</p>
           ) : (
             <ul
               ref={listRef}
@@ -883,15 +950,15 @@ export default function App() {
                         }}
                         className={`focus-ring min-w-0 flex-1 rounded px-2 py-1 text-left transition-colors ${
                           current?.id === session.id && !showReview
-                            ? "bg-slate-100 text-blue-700"
-                            : "text-slate-600 hover:bg-slate-50"
+                            ? "bg-stone-100 text-accent-700"
+                            : "text-stone-600 hover:bg-stone-50"
                         }`}
                       >
                         <span className="block truncate text-sm">{session.name}</span>
                         {/* PII count, plus whether a summary exists: the list is
                             for finding a recording fast, and "does this one have
                             the answer or only the text" is worth knowing there. */}
-                        <span className="block truncate text-[12px] tabular-nums text-slate-500">
+                        <span className="block truncate text-[12px] tabular-nums text-stone-500">
                           {/* JSX drops a newline between expressions, so the
                               separator has to be written out or the row reads
                               "выжимка5 персональных данных". */}
@@ -912,7 +979,7 @@ export default function App() {
                         }}
                         aria-label={`Переименовать запись ${session.name}`}
                         title="Переименовать"
-                        className="focus-ring grid h-7 w-7 shrink-0 place-items-center rounded text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:text-slate-700"
+                        className="focus-ring relative grid h-7 w-7 shrink-0 place-items-center rounded text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 focus-visible:text-stone-700 before:absolute before:-inset-2 before:content-['']"
                       >
                         <Pencil aria-hidden className="h-4 w-4" />
                       </button>
@@ -929,7 +996,7 @@ export default function App() {
                           </button>
                           <button
                             onClick={() => setConfirmDeleteId(null)}
-                            className="focus-ring rounded px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50"
+                            className="focus-ring rounded px-1.5 py-0.5 text-xs text-stone-600 hover:bg-stone-50"
                           >
                             Нет
                           </button>
@@ -939,7 +1006,7 @@ export default function App() {
                           onClick={() => setConfirmDeleteId(session.id)}
                           aria-label={`Удалить запись ${session.name}`}
                           title="Удалить запись"
-                          className="focus-ring grid h-7 w-7 shrink-0 place-items-center rounded text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:text-slate-700"
+                          className="focus-ring relative grid h-7 w-7 shrink-0 place-items-center rounded text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-700 focus-visible:text-stone-700 before:absolute before:-inset-2 before:content-['']"
                         >
                           <Trash2 aria-hidden className="h-4 w-4" />
                         </button>
@@ -950,22 +1017,9 @@ export default function App() {
               ))}
             </ul>
           )}
-          <div className="mt-8 border-t border-slate-200 pt-3">
-            <button
-              onClick={() => (settingsOpen ? setSettingsOpen(false) : openSettings())}
-              aria-expanded={settingsOpen}
-              aria-controls="settings-panel"
-              className={`focus-ring flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors ${
-                settingsOpen ? "bg-slate-100 text-blue-700" : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              <SettingsIcon aria-hidden className="h-4 w-4 shrink-0" />
-              <span className="min-w-0 flex-1">Настройки</span>
-            </button>
-          </div>
         </aside>
 
-        <main {...dropHandlers} className={`order-1 min-w-0 lg:order-2 ${dragging ? "rounded-lg ring-2 ring-blue-300" : ""}`}>
+        <main {...dropHandlers} className={`order-1 min-w-0 lg:order-2 ${dragging ? "rounded-lg ring-2 ring-accent-300" : ""}`}>
           <input
             ref={inputRef}
             type="file"
@@ -987,13 +1041,13 @@ export default function App() {
               <button
                 onClick={() => setSettingsOpen(false)}
                 aria-label={settingsFrom === "document" ? "Вернуться к протоколу" : "Вернуться к записям"}
-                className="focus-ring -ml-1 mb-3 inline-flex items-center gap-1.5 rounded text-sm text-slate-500 hover:text-slate-900"
+                className="focus-ring -ml-1 mb-3 inline-flex items-center gap-1.5 rounded text-sm text-stone-500 hover:text-stone-900"
               >
                 <ArrowLeft aria-hidden className="h-4 w-4" />
                 {settingsFrom === "document" ? "К протоколу" : "К записям"}
               </button>
-              <h2 className="text-lg font-semibold tracking-tight text-slate-900">Настройки</h2>
-              <p className="mt-1 text-sm text-slate-600">
+              <h2 className="text-lg font-semibold tracking-tight text-stone-900">Настройки</h2>
+              <p className="mt-1 text-sm text-stone-600">
                 Здесь выбирается сервис, который составит выжимку, и ключ к нему. Всё хранится на этом
                 компьютере.
               </p>
@@ -1011,7 +1065,7 @@ export default function App() {
           ) : null}
 
           {!settingsOpen && settings && !settings.has_key && view === "empty" ? (
-            <div className="mb-6 border-l-2 border-red-400 bg-red-50 px-4 py-3">
+            <div className="mb-6 border border-red-300 bg-red-50 px-4 py-3">
               <p className="text-sm font-medium text-red-900">Не задан ключ</p>
               <p className="mt-1 text-sm text-red-800">
                 Запись всё равно расшифруется и личные данные будут скрыты, но ответа модели не будет. Откройте{" "}
@@ -1029,7 +1083,7 @@ export default function App() {
               {/* Only when a document is behind the bar. On a fresh run the
                   working panel below already names the file. */}
               {workingOn && view !== "empty" ? (
-                <p className="mt-1 truncate font-mono text-[12px] text-slate-600">{workingOn}</p>
+                <p className="mt-1 truncate font-mono text-[12px] text-stone-600">{workingOn}</p>
               ) : null}
             </div>
           ) : null}
@@ -1040,21 +1094,21 @@ export default function App() {
           {!settingsOpen && busy === "summarising" ? (
             <div>
               <ProgressBar pct={70} message="Модель читает текст и пишет выжимку" elapsed={elapsed} />
-              {workingOn ? <p className="mt-1 truncate font-mono text-[12px] text-slate-600">{workingOn}</p> : null}
+              {workingOn ? <p className="mt-1 truncate font-mono text-[12px] text-stone-600">{workingOn}</p> : null}
             </div>
           ) : null}
 
           {!settingsOpen && error ? (
-            <div className="border-l-2 border-red-400 bg-red-50 px-4 py-3" role="status">
+            <div className="border border-red-300 bg-red-50 px-4 py-3" role="status">
               <p className="text-sm font-medium text-red-900">Не получилось</p>
               <p className="mt-1 text-sm text-red-800">{error}</p>
             </div>
           ) : null}
 
           {!settingsOpen && view === "empty" && !error && busy !== "analysing" ? (
-            <div className="no-print flex min-h-[380px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 px-6 py-12 text-center">
+            <div className="no-print flex min-h-[380px] flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 px-6 py-12 text-center">
               <Mark className="h-10 w-10" />
-              <h2 className="mt-4 max-w-sm text-lg font-semibold tracking-tight text-slate-900">
+              <h2 className="mt-4 max-w-sm text-lg font-semibold tracking-tight text-stone-900">
                 Загрузите запись встречи
               </h2>
               {/* The action sits above the prose, not below two paragraphs of it.
@@ -1069,24 +1123,21 @@ export default function App() {
                   Drag-and-drop is invisible until you know it exists; the privacy
                   promise is not answered here — it is shown, later, on the review
                   screen, where the masked text is actually there to read. */}
-              <p className="mx-auto mt-3 max-w-md text-sm text-slate-500">
+              <p className="mx-auto mt-3 max-w-md text-sm text-stone-500">
                 Или перетащите сюда. Подойдёт почти любой формат
               </p>
             </div>
           ) : null}
 
           {!settingsOpen && view === "empty" && busy === "analysing" ? (
-            <div className="no-print flex min-h-[380px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 px-6 py-12 text-center">
+            <div className="no-print flex min-h-[380px] flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 px-6 py-12 text-center">
               <Mark className="h-10 w-10" />
-              <h2 className="mt-4 max-w-sm text-lg font-semibold tracking-tight text-slate-900">
+              <h2 className="mt-4 max-w-sm text-lg font-semibold tracking-tight text-stone-900">
                 Обрабатываем запись
               </h2>
               {workingOn ? (
-                <p className="mt-2 max-w-sm truncate font-mono text-xs text-slate-500">{workingOn}</p>
+                <p className="mt-2 max-w-sm truncate font-mono text-xs text-stone-500">{workingOn}</p>
               ) : null}
-              <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
-                Пока идёт разбор, первые минуты уходят на чтение. Это самая долгая часть.
-              </p>
             </div>
           ) : null}
 
@@ -1109,8 +1160,10 @@ export default function App() {
               session={current}
               settings={settings}
               preset={preset}
+              mode={shownMode}
+              onMode={setShownMode}
               onPreset={setPreset}
-              onResummarise={() => void runSummary(current)}
+              onResummarise={() => runSummary(current)}
               onOpenSettings={openSettings}
               busy={busy === "summarising"}
             />

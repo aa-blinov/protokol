@@ -45,7 +45,7 @@ export function ComposeGate({
     <div className="max-w-xl space-y-4">
       <PresetPicker presets={settings.presets} value={preset} onChange={onPreset} disabled={busy} />
       {settings.extra ? (
-        <p className="border-l-2 border-slate-300 pl-3 text-xs text-slate-600">
+        <p className="border-l border-stone-300 pl-3 text-xs text-stone-600">
           Плюс ваше требование: «{settings.extra}»
         </p>
       ) : null}
@@ -69,9 +69,9 @@ export function ComposeGate({
       </div>
 
       {!settings.has_key ? (
-        <p className="text-xs text-slate-500">Без ключа модель не ответит. Расшифровка от этого не пострадает.</p>
+        <p className="text-xs text-stone-500">Без ключа модель не ответит. Расшифровка от этого не пострадает.</p>
       ) : !canRun ? (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-stone-500">
           Расшифровка этой записи больше не сохранена. Загрузите файл заново, это займёт столько же времени.
         </p>
       ) : null}
