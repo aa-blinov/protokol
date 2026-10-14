@@ -36,3 +36,9 @@ sessions.json
 # Tool scratch: canvas assets and critique snapshots are per-run, not source.
 .mavis/
 .impeccable/
+
+# Analysis cache (transcripts) written by the dev API when run from the repo root
+/cache/
+
+# Screenshots from the browser checks (web/e2e/run.mjs), rewritten on every run.
+/web/e2e/out/

@@ -2,19 +2,20 @@
 name: Протокол
 description: Приватная расшифровка встреч — аудио → маскированный текст → LLM, всё локально
 colors:
-  primary: "#1d4ed8"
+  primary: "#1f5a46"
   primary-foreground: "#ffffff"
-  foreground: "#0f172a"
-  background: "#ffffff"
-  paper: "#f1f5f9"
-  muted-foreground: "#64748b"
-  border: "#e2e8f0"
+  foreground: "#1d1b16"
+  background: "#ece7dc"
+  sheet: "#faf8f3"
+  paper: "#efebe3"
+  muted-foreground: "#6b6556"
+  border: "#e3ded3"
   destructive: "#b91c1c"
   dark:
-    background: "#0b1120"
-    surface: "#0f172a"
-    foreground: "#e5e7eb"
-    border: "#1e293b"
+    background: "#12110e"
+    sheet: "#1a1915"
+    foreground: "#ece8dc"
+    border: "#33312a"
 typography:
   body:
     fontFamily: '"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif'
@@ -62,43 +63,43 @@ The single most important decision is that the result is **a document, not a das
 
 **Key characteristics:**
 - **Document, not cards.** Sections are separated by 1px rules and small mono labels; there are no bordered boxes, no shadows, no accent dots, no numbered titles.
-- **Near-monochrome chrome, one accent.** `#1d4ed8` marks the single primary action, the progress fill, and the focus ring — nothing else.
+- **Near-monochrome chrome, one accent.** `#1f5a46` marks the single primary action, the progress fill, and the focus ring — nothing else.
 - **Colour means PII.** The only saturated colour on screen is the entity chips; everything else is slate on white/paper.
 - **Mono for the machine.** Tokens, counts, durations, model ids, timestamps — and the section labels themselves — are monospace. Prose is the system sans.
-- **Marked and themable.** A brand mark (the app icon's bars-in-a-square) anchors the header, and the whole surface flips to a dark palette from one control.
+- **Marked and themable.** A brand mark (the app icon: a page with one line redacted) anchors the header, and the whole surface flips to a dark palette from one control.
 
 ## Colors
 
-Near-monochrome slate-and-paper chrome, one disciplined accent, a saturated chip palette used only for masked entities.
+Warm paper and ink, one green accent. The neutrals lean warm so the page reads as a sheet of paper, not a screen; the accent is the green of a ledger stamp, used once per view.
 
 ### Dark theme
-The same system on ink: page `#0b1120`, surface `#0f172a`, text `#e5e7eb`, hairline `#1e293b`; Vault Blue stays the accent and the chip palette darkens to keep its hue mapping legible. Applied by toggling a `.dark` class on `<html>`, before first paint, from a saved preference.
+The same system on warm charcoal: page `#12110e`, sheet `#1a1915`, text `#ece8dc`, hairline `#33312a`. The accent lifts to `#8fd0b3` when it is used as text, so it stays legible on the dark sheet. Applied by toggling a `.dark` class on `<html>`, before first paint, from a saved preference.
 
 ### Primary
-- **Vault Blue** (`#1d4ed8`): the one accent — the primary button, the progress indicator fill, the focus ring. Its rarity is deliberate.
+- **Ledger Green** (`#1f5a46`): the one accent: the primary button, the progress fill, the focus ring. Its rarity is deliberate.
 
 ### Neutral
-- **Ink** (`#0f172a`): primary text and the document title. Near-black, not black.
-- **Paper** (`#f1f5f9`): the page surface; the document sits on white.
-- **Slate text** (`#64748b`) and **faint** (`#94a3b8`): meta lines, section labels, timestamps.
-- **Hairline** (`#e2e8f0`): every separator — section rules and control borders. Separation is done with lines, never with shadows or boxes.
+- **Ink** (`#1d1b16`): primary text and the document title. Warm near-black, not black.
+- **Paper** (`#ece7dc`): the page surface. The document sits on **Sheet** (`#faf8f3`).
+- **Stone text** (`#6b6556`): meta lines, section labels, timestamps. Passes 4.5:1 on both paper and sheet.
+- **Hairline** (`#e3ded3`): every separator, section rules and control borders. Separation is done with lines, never with shadows or boxes.
 
 ### Destructive
 - **Signal Red** (`#b91c1c`): error text only.
 
 ### Entity chips (the signature colour system)
-Colour appears here and almost nowhere else — the tokens that got masked, so privacy is visible in the running text.
-- **PERSON** — blue (`#dbeafe` / border `#93c5fd` / text `#1e3a8a`)
-- **ADDRESS** — green (`#dcfce7` / `#86efac` / `#14532d`)
-- **PHONE** — amber (`#fef3c7` / `#fcd34d` / `#78350f`)
-- **EMAIL** — violet (`#ede9fe` / `#c4b5fd` / `#4c1d95`)
-- **Documents** (PASSPORT / INN / SNILS / OMS / CARD / DRIVER_LICENSE / MILITARY_ID / BIRTH_CERTIFICATE) — red (`#fee2e2` / `#fca5a5` / `#7f1d1d`)
-- **URL / IP** — slate (`#e2e8f0` / `#cbd5e1` / `#0f172a`)
-- **OTHER** — quiet slate (`#f1f5f9` / `#cbd5e1` / `#334155`)
+Colour appears here and almost nowhere else. The chips are muted, one tone family per entity type, so they mark data without shouting.
+- **PERSON**: slate-blue (`#e1e8ef` / border `#a9bccf` / text `#223a57`)
+- **ADDRESS**: sage (`#e0ece2` / `#a8c7b0` / `#24462f`)
+- **PHONE**: ochre (`#f1e8cf` / `#d3b979` / `#5a4311`)
+- **EMAIL**: plum-grey (`#e9e4ef` / `#bcaed0` / `#45305f`)
+- **Documents** (PASSPORT / INN / SNILS / OMS / CARD / DRIVER_LICENSE / MILITARY_ID / BIRTH_CERTIFICATE / OGRNIP / SECRET): brick (`#f2dfd9` / `#d4a296` / `#6a2a1d`). OGRNIP is a sole proprietor's number, SECRET is a token, API key or one-time code.
+- **URL / IP**: warm grey (`#e6e3da` / `#c9c3b2` / `#3b382f`)
+- **OTHER**: quiet paper (`#efece4` / `#d3cdbd` / `#4a4739`). Also company numbers (ORG_ID: KPP, OGRN) and generic numbers (NUMBER).
 
 ### Named rules
-**The One Accent Rule.** `#1d4ed8` marks exactly one thing per view: the primary action, the live progress, or the focus ring.
-**The Colour-Means-PII Rule.** Saturation signals "this is masked data." Anything coloured that is not an entity chip is a mistake. This is why the previous decorative accent dots, coloured metadata pills, and speaker hues were removed — meta text is mono slate, speaker labels are plain mono text.
+**The One Accent Rule.** `#1f5a46` marks exactly one thing per view: the primary action, the live progress, or the focus ring.
+**The Colour-Means-PII Rule.** Saturation signals "this is masked data." Anything coloured that is not an entity chip is a mistake. Meta text is mono stone, speaker labels are plain mono text.
 
 ## Typography
 
@@ -134,7 +135,7 @@ Small and utilitarian: `6px` on controls, `4px` on chips, `8px` on the drop targ
 ## Components
 
 ### Brand mark
-The app-bar identity: the icon's shape — two white bars in a rounded Vault Blue square — at `28px` beside the wordmark «Протокол» and the one-line descriptor. The same mark is the favicon and the desktop icon, so the product has one face.
+The app-bar identity: a page with one line redacted, in a rounded Ledger Green square, at `28px` beside the wordmark «Протокол». The same mark is the favicon and the desktop icon, so the product has one face.
 
 ### Document header
 File name as the title (`1.5rem` semibold, wraps), one mono meta line beneath, then quiet actions: `Скачать .txt` and `Печать / PDF` (outlined) and `Обработать ещё` (text). No badge row, no accent dot.
@@ -178,7 +179,7 @@ Numbers follow the same rule. The review screen used to print "5 личных д
 
 ### The Accent Is Not `blue-700`
 
-`#1d4ed8` is the one accent, and the interface says `bg-blue-700` in fourteen places. Those are not the same colour: shadcn rewrites the whole `--color-blue-*` scale to its own indigo, so every one of those fourteen resolved to `#4338ca`-ish while the token file named `#1d4ed8`. The palette was right on paper and wrong on screen, and nothing errored.
+`#1f5a46` is the one accent, and the interface says `bg-blue-700` in fourteen places. Those are not the same colour: shadcn rewrites the whole `--color-blue-*` scale to its own indigo, so every one of those fourteen resolved to `#4338ca`-ish while the token file named `#1f5a46`. The palette was right on paper and wrong on screen, and nothing errored.
 
 Two consequences, both now enforced:
 
@@ -202,12 +203,12 @@ Mono, `0.8125rem`, `4px` radius, 1px border, saturated background with tone-on-t
 When a recording has several speakers, the transcript becomes a list: a `92px` margin rail with the speaker label ("Спикер 1") and start time in mono slate, then the turn's text at the reading measure. Monochrome — identity is the number, not a hue.
 
 ### Buttons
-- **Primary:** solid Vault Blue, white text, `min-h-9`, `6px 12px` — the single CTA ("Выбрать аудиофайл").
+- **Primary:** solid Ledger Green, white text, `min-h-9`, `6px 12px` — the single CTA ("Выбрать аудиофайл").
 - **Ghost:** white, slate-800 text, 1px slate-300 border — secondary ("Скачать .txt", "Печать / PDF", "Настройки", theme toggle).
 - **Text:** no border, slate-500 → slate-900 on hover — inline affordances ("Обработать ещё", "Скопировать").
 
 ### Inputs
-Monochrome fields on white, 1px `--border`, `6px` radius, focus ring in Vault Blue.
+Monochrome fields on white, 1px `--border`, `6px` radius, focus ring in Ledger Green.
 
 ### Progress
 A thin `h-1.5` `bg-slate-200` track filled with the accent; a message on the left, a mono percentage on the right.
