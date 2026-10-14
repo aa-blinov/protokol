@@ -104,7 +104,7 @@ export function PresetPicker({
           <label
             key={preset.key}
             className={`flex min-h-11 cursor-pointer items-center gap-2.5 rounded border px-3 py-2 text-sm transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--ring)] ${
-              active ? "border-blue-700 bg-blue-50 text-slate-900" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              active ? "border-accent-700 bg-accent-50 text-stone-900" : "border-stone-300 bg-sheet text-stone-700 hover:bg-stone-50"
             } ${disabled ? "pointer-events-none opacity-60" : ""}`}
           >
             <input
@@ -113,7 +113,7 @@ export function PresetPicker({
               checked={active}
               disabled={disabled}
               onChange={() => onChange(preset.key)}
-              className="h-4 w-4 shrink-0 accent-blue-700"
+              className="h-4 w-4 shrink-0 accent-accent-700"
             />
             <span className="min-w-0">{preset.label}</span>
           </label>
@@ -127,27 +127,39 @@ export function PresetPicker({
  *  quoted for the model it shows the token count and stops there. */
 export function EstimateLine({ estimate, waiting }: { estimate: EstimateResult | null; waiting: boolean }) {
   if (waiting && !estimate) {
-    return <p className="text-xs text-slate-500">Считаем примерную стоимость…</p>;
+    return <p className="text-xs text-stone-500">Считаем примерную стоимость…</p>;
   }
   if (!estimate) return null;
   const price = estimate.total === null ? null : formatMoney(estimate.total);
   return (
-    <div className="space-y-1 text-xs text-slate-600">
+    <div className="space-y-1 text-xs text-stone-600">
       <p className="tabular-nums">
         {tokens(estimate.tokens_in)} текста уйдёт в модель
         {estimate.requests > 1 ? `, обращений к модели: ${estimate.requests}` : ""}
         {price ? <>, примерно {price}</> : null}
       </p>
       {estimate.requests > 1 ? (
-        <p className="text-slate-500">
+        <p className="text-stone-500">
           Разговор длинный: текст сначала сжимается по частям, поэтому обращений к модели больше одного. После отправки
           покажем точную сумму.
         </p>
       ) : null}
       {price === null ? (
-        <p className="text-slate-500">Стоимость зависит от провайдера и станет известна только после отправки.</p>
+        <p className="text-stone-500">Стоимость зависит от провайдера и станет известна только после отправки.</p>
       ) : null}
     </div>
+  );
+}
+
+/** The same figure as EstimateLine, cut to one phrase for the action bar. */
+export function EstimateShort({ estimate, waiting }: { estimate: EstimateResult | null; waiting: boolean }) {
+  if (!estimate) return <span>{waiting ? "Считаем стоимость…" : null}</span>;
+  const price = estimate.total === null ? null : formatMoney(estimate.total);
+  return (
+    <span className="tabular-nums">
+      {tokens(estimate.tokens_in)}
+      {price ? `, примерно ${price}` : null}
+    </span>
   );
 }
 
@@ -163,13 +175,13 @@ export function ActualCostLine({
 }) {
   if (cost.total === null) {
     return tokensIn === null ? null : (
-      <p className="tabular-nums text-xs text-slate-500">
+      <p className="tabular-nums text-xs text-stone-500">
         {tokens(tokensIn)} в модель, {tokens(tokensOut ?? 0)} обратно
       </p>
     );
   }
   return (
-    <p className="tabular-nums text-xs text-slate-500">
+    <p className="tabular-nums text-xs text-stone-500">
       {formatMoney(cost.total)}, {tokens(tokensIn ?? 0)} в модель, {tokens(tokensOut ?? 0)} обратно
     </p>
   );

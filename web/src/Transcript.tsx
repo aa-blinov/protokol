@@ -40,7 +40,7 @@ export function TranscriptSearch({
       <div className="relative min-w-[12rem] flex-1">
         <Search
           aria-hidden
-          className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+          className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -transtone-y-1/2 text-stone-400"
         />
         <input
           value={query}
@@ -54,13 +54,13 @@ export function TranscriptSearch({
           }}
           placeholder="Поиск по расшифровке"
           aria-label="Поиск по расшифровке"
-          className={`${FIELD} w-full pl-8 pr-8 text-sm placeholder:text-slate-500`}
+          className={`${FIELD} w-full pl-8 pr-8 text-sm placeholder:text-stone-500`}
         />
         {query ? (
           <button
             onClick={() => onQuery("")}
             aria-label="Очистить поиск"
-            className="focus-ring absolute right-1 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-slate-500 hover:bg-slate-100"
+            className="focus-ring absolute right-1 top-1/2 grid h-6 w-6 -transtone-y-1/2 place-items-center rounded text-stone-500 hover:bg-stone-100 before:absolute before:-inset-2.5 before:content-['']"
           >
             <X aria-hidden className="h-3.5 w-3.5" />
           </button>
@@ -69,14 +69,14 @@ export function TranscriptSearch({
 
       {query ? (
         <div className="flex items-center gap-1">
-          <span className="tabular-nums text-xs text-slate-500">
+          <span className="tabular-nums text-xs text-stone-500">
             {hits.length ? `${cursor + 1} из ${hits.length}` : "не найдено"}
           </span>
           <button
             onClick={() => onStep(-1)}
             disabled={!hits.length}
             aria-label="Предыдущее совпадение"
-            className="focus-ring grid h-8 w-8 place-items-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+            className="focus-ring relative grid h-8 w-8 place-items-center rounded border border-stone-300 bg-sheet text-stone-600 hover:bg-stone-50 disabled:opacity-40 before:absolute before:-inset-1.5 before:content-['']"
           >
             <ChevronUp aria-hidden className="h-4 w-4" />
           </button>
@@ -84,7 +84,7 @@ export function TranscriptSearch({
             onClick={() => onStep(1)}
             disabled={!hits.length}
             aria-label="Следующее совпадение"
-            className="focus-ring grid h-8 w-8 place-items-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+            className="focus-ring relative grid h-8 w-8 place-items-center rounded border border-stone-300 bg-sheet text-stone-600 hover:bg-stone-50 disabled:opacity-40 before:absolute before:-inset-1.5 before:content-['']"
           >
             <ChevronDown aria-hidden className="h-4 w-4" />
           </button>
@@ -119,7 +119,7 @@ export function Transcript({
   return (
     <div>
       {query && hits.length >= MAX_HITS ? (
-        <p className="mb-3 text-xs text-slate-500">
+        <p className="mb-3 text-xs text-stone-500">
           Показаны первые {MAX_HITS} совпадений. Дополните запрос, чтобы сузить поиск.
         </p>
       ) : null}
@@ -137,7 +137,7 @@ export function Transcript({
 function Body({ analysis, hits, cursor }: { analysis: AnalysisResult; hits: Hit[]; cursor: number }) {
   if (analysis.segments.length === 0) {
     return (
-      <div className="max-w-[68ch] text-[15px] leading-7 text-slate-800">
+      <div className="max-w-[68ch] text-[15px] leading-7 text-stone-800">
         <Highlighted text={analysis.transcript} entities={analysis.entities} hits={hits} current={cursor} />
       </div>
     );
@@ -156,12 +156,12 @@ function Body({ analysis, hits, cursor }: { analysis: AnalysisResult; hits: Hit[
         return (
           <li key={index} className="grid grid-cols-[92px_1fr] gap-4">
             <div className="pt-1 leading-tight">
-              <div className="font-mono text-[12px] text-slate-500">Спикер {segment.speaker + 1}</div>
-              <div className="mt-0.5 font-mono text-[12px] tabular-nums text-slate-500">
+              <div className="font-mono text-[12px] text-stone-500">Спикер {segment.speaker + 1}</div>
+              <div className="mt-0.5 font-mono text-[12px] tabular-nums text-stone-500">
                 {clock(segment.start)}
               </div>
             </div>
-            <div className="max-w-[68ch] text-[15px] leading-7 text-slate-800">
+            <div className="max-w-[68ch] text-[15px] leading-7 text-stone-800">
               <Highlighted
                 text={segment.text}
                 entities={within(analysis.entities, from, segment.text.length)}

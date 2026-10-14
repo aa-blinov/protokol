@@ -64,6 +64,8 @@ export interface SummarizeResult {
   /** What it actually cost. Null when the provider quotes no fixed price. */
   cost: { input: number | null; output: number | null; total: number | null };
   timings: Record<string, number>;
+  /** Things to check before trusting the summary. Absent in summaries made earlier. */
+  warnings?: string[];
 }
 
 /** What one summary will roughly cost, before it is sent. */

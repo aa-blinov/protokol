@@ -10,9 +10,9 @@ import { Progress } from "@/components/ui/progress";
 import { ChevronDown } from "lucide-react";
 
 const BUTTON_SURFACE = {
-  primary: "bg-blue-700 text-white hover:bg-blue-800 hover:text-white",
-  ghost: "border-slate-300 bg-white text-slate-800 hover:bg-slate-50 hover:text-slate-800",
-  text: "text-slate-500 hover:bg-transparent hover:text-slate-900",
+  primary: "bg-accent-700 text-white hover:bg-accent-800 hover:text-white",
+  ghost: "border-stone-300 bg-sheet text-stone-800 hover:bg-stone-50 hover:text-stone-800",
+  text: "text-stone-500 hover:bg-transparent hover:text-stone-900",
 } as const;
 
 /** Border, padding and radius for every single-line field.
@@ -23,7 +23,7 @@ const BUTTON_SURFACE = {
  *  is correct on its own. `check_controls.py` fails the build if it drifts
  *  again. Add `pl-`/`pr-` after this for an inset icon; Tailwind emits those
  *  later, so they win. */
-export const FIELD = "focus-ring rounded border border-slate-300 bg-white px-3 py-2 leading-5";
+export const FIELD = "focus-ring rounded border border-stone-300 bg-sheet px-3 py-2 leading-5";
 
 export function Button({
   children,
@@ -98,7 +98,7 @@ export function Section({
         type="button"
         onClick={onToggle}
         aria-expanded={!collapsed}
-        className={`focus-ring flex cursor-pointer items-baseline gap-1.5 rounded ${LABEL} text-slate-500 hover:text-slate-900`}
+        className={`focus-ring flex cursor-pointer items-baseline gap-1.5 rounded ${LABEL} text-stone-500 hover:text-stone-900`}
       >
         <ChevronDown
           aria-hidden
@@ -109,18 +109,18 @@ export function Section({
       </button>
     </h3>
   ) : (
-    <h3 className={`${LABEL} text-slate-500`}>{label}</h3>
+    <h3 className={`${LABEL} text-stone-500`}>{label}</h3>
   );
 
   return (
-    <section className="mt-8 border-t border-slate-200 pt-5">
+    <section className="mt-8 border-t border-stone-200 pt-5">
       <div className="mb-4 flex items-baseline justify-between gap-4">
         {heading}
-        {meta ? <div className="no-print text-xs text-slate-500">{meta}</div> : null}
+        {meta ? <div className="no-print text-xs text-stone-500">{meta}</div> : null}
       </div>
       {collapsed ? (
         collapsedNote ? (
-          <p className="text-xs text-slate-500">{collapsedNote}</p>
+          <p className="text-xs text-stone-500">{collapsedNote}</p>
         ) : null
       ) : (
         children
@@ -143,7 +143,7 @@ export function CopyButton({ text, label = "Скопировать" }: { text: s
           })
           .catch(() => {});
       }}
-      className="focus-ring rounded text-xs text-slate-500 transition-colors hover:text-slate-900"
+      className="focus-ring rounded text-xs text-stone-500 transition-colors hover:text-stone-900"
     >
       {copied ? "Скопировано" : label}
     </button>
@@ -157,7 +157,7 @@ export function CopyButton({ text, label = "Скопировать" }: { text: s
 const INLINE =
   /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\n]+\*)|(_[^_\n]+_)|(~~[^~]+~~)|(\[[^\]]+\]\([^)\s]+\))/g;
 
-const TEXT = "text-[15px] leading-7 text-slate-800";
+const TEXT = "text-[15px] leading-7 text-stone-800";
 
 /** Inline spans: code, bold, italic, strikethrough, links. */
 function renderInline(text: string): ReactNode {
@@ -171,13 +171,13 @@ function renderInline(text: string): ReactNode {
     const token = match[0];
     if (token.startsWith("`")) {
       nodes.push(
-        <code key={key++} className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[0.85em] text-slate-700">
+        <code key={key++} className="rounded bg-stone-100 px-1 py-0.5 font-mono text-[0.85em] text-stone-700">
           {token.slice(1, -1)}
         </code>,
       );
     } else if (token.startsWith("**") || token.startsWith("__")) {
       nodes.push(
-        <strong key={key++} className="font-semibold text-slate-900">
+        <strong key={key++} className="font-semibold text-stone-900">
           {token.slice(2, -2)}
         </strong>,
       );
@@ -191,7 +191,7 @@ function renderInline(text: string): ReactNode {
           href={link ? link[2] : "#"}
           target="_blank"
           rel="noreferrer"
-          className="text-blue-700 underline decoration-slate-300 underline-offset-2"
+          className="text-accent-700 underline decoration-stone-300 underline-offset-2"
         >
           {link ? link[1] : token}
         </a>,
@@ -264,7 +264,7 @@ export function Markdown({ text }: { text: string }) {
       blocks.push(
         <pre
           key={`c${i}`}
-          className="mt-2 max-w-[68ch] overflow-x-auto rounded border border-slate-200 bg-slate-50 p-3 font-mono text-[13px] leading-6 text-slate-700"
+          className="mt-2 max-w-[68ch] overflow-x-auto rounded border border-stone-200 bg-stone-50 p-3 font-mono text-[13px] leading-6 text-stone-700"
         >
           <code>{code.join("\n")}</code>
         </pre>,
@@ -289,7 +289,7 @@ export function Markdown({ text }: { text: string }) {
                 {header.map((cell, column) => (
                   <th
                     key={column}
-                    className="border-b border-slate-200 px-2 py-1 text-left font-semibold text-slate-900"
+                    className="border-b border-stone-200 px-2 py-1 text-left font-semibold text-stone-900"
                   >
                     {renderInline(cell)}
                   </th>
@@ -300,7 +300,7 @@ export function Markdown({ text }: { text: string }) {
               {rows.map((row, index) => (
                 <tr key={index}>
                   {row.map((cell, column) => (
-                    <td key={column} className="border-b border-slate-100 px-2 py-1 align-top">
+                    <td key={column} className="border-b border-stone-100 px-2 py-1 align-top">
                       {renderInline(cell)}
                     </td>
                   ))}
@@ -317,7 +317,7 @@ export function Markdown({ text }: { text: string }) {
     if (heading) {
       flushParagraph();
       blocks.push(
-        <h4 key={`h${i}`} className="mt-5 font-semibold tracking-tight text-slate-900">
+        <h4 key={`h${i}`} className="mt-5 font-semibold tracking-tight text-stone-900">
           {renderInline(heading[2] ?? heading[1])}
         </h4>,
       );
@@ -327,7 +327,7 @@ export function Markdown({ text }: { text: string }) {
 
     if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(line)) {
       flushParagraph();
-      blocks.push(<hr key={`r${i}`} className="my-5 border-t border-slate-200" />);
+      blocks.push(<hr key={`r${i}`} className="my-5 border-t border-stone-200" />);
       i++;
       continue;
     }
@@ -340,7 +340,7 @@ export function Markdown({ text }: { text: string }) {
         i++;
       }
       blocks.push(
-        <blockquote key={`q${i}`} className="mt-2 max-w-[68ch] border-l-2 border-slate-300 pl-4 text-slate-600">
+        <blockquote key={`q${i}`} className="mt-2 max-w-[68ch] border-l border-stone-300 pl-4 text-stone-600">
           {renderInline(quote.join(" "))}
         </blockquote>,
       );
@@ -405,22 +405,24 @@ export function ProgressBar({
     // zone nearly twice that, and a progress indicator that stops two-thirds
     // across the area it is measuring looks like it is stuck.
     <div className="space-y-2">
-      <div className="flex items-baseline justify-between gap-3 text-xs text-slate-600">
-        <span>{message}</span>
+      <div className="flex items-baseline justify-between gap-3 text-xs text-stone-600">
+        {/* Only the stage message is a live region. Announcing the percentage
+            on every tick would talk over the screen reader for a minute. */}
+        <span role="status">{message}</span>
         <span className="flex shrink-0 items-baseline gap-2">
           {/* One time figure, and only one we can stand behind. A previous
               measurement gives a remainder; without one, elapsed time is the
               honest answer -- showing nothing for the first minute reads as a
               hang. */}
           {eta !== null && eta !== undefined && eta > 0 ? (
-            <span className="text-slate-500">осталось примерно {humanSeconds(eta)}</span>
+            <span className="text-stone-500">осталось примерно {humanSeconds(eta)}</span>
           ) : elapsed ? (
-            <span className="text-slate-500">прошло {humanSeconds(elapsed)}</span>
+            <span className="text-stone-500">прошло {humanSeconds(elapsed)}</span>
           ) : null}
-          <span className="font-mono tabular-nums text-slate-500">{pct}%</span>
+          <span className="font-mono tabular-nums text-stone-500">{pct}%</span>
         </span>
       </div>
-      <Progress value={pct} aria-label={message} className="h-1.5 rounded-full bg-slate-200" />
+      <Progress value={pct} aria-label={message} className="h-1.5 rounded-full bg-stone-300" />
     </div>
   );
 }

@@ -10,8 +10,27 @@
 @theme {
   --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
-  --color-ink: #0f172a;
-  --color-paper: #f1f5f9;
+  /* Paper and ink. Neutrals are warm, so the page reads as paper rather than a
+     screen; the one accent is ledger green, used for the single action. */
+  --color-paper: #ece7dc;
+  --color-sheet: #faf8f3;
+  --color-ink: #1d1b16;
+  --color-stone-50: #f7f5f0;
+  --color-stone-100: #efebe3;
+  --color-stone-200: #e3ded3;
+  --color-stone-300: #cdc6b6;
+  --color-stone-400: #a29b8a;
+  --color-stone-500: #6b6556;
+  --color-stone-600: #565043;
+  --color-stone-700: #443f34;
+  --color-stone-800: #2f2b23;
+  --color-stone-900: #1d1b16;
+  --color-accent-50: #eaf2ee;
+  --color-accent-100: #d6e6dd;
+  --color-accent-300: #8dbba6;
+  --color-accent-700: #1f5a46;
+  --color-accent-800: #184838;
+  --color-accent-900: #10332a;
 }
 
 html,
@@ -39,10 +58,10 @@ body {
   font-weight: 600;
 }
 
-.chip-PERSON { background: #dbeafe; border-color: #93c5fd; color: #1e3a8a; }
-.chip-ADDRESS { background: #dcfce7; border-color: #86efac; color: #14532d; }
-.chip-PHONE { background: #fef3c7; border-color: #fcd34d; color: #78350f; }
-.chip-EMAIL { background: #ede9fe; border-color: #c4b5fd; color: #4c1d95; }
+.chip-PERSON { background: #e1e8ef; border-color: #a9bccf; color: #223a57; }
+.chip-ADDRESS { background: #e0ece2; border-color: #a8c7b0; color: #24462f; }
+.chip-PHONE { background: #f1e8cf; border-color: #d3b979; color: #5a4311; }
+.chip-EMAIL { background: #e9e4ef; border-color: #bcaed0; color: #45305f; }
 .chip-PASSPORT,
 .chip-INN,
 .chip-SNILS,
@@ -50,10 +69,12 @@ body {
 .chip-CARD,
 .chip-DRIVER_LICENSE,
 .chip-MILITARY_ID,
-.chip-BIRTH_CERTIFICATE { background: #fee2e2; border-color: #fca5a5; color: #7f1d1d; }
+.chip-BIRTH_CERTIFICATE,
+.chip-OGRNIP,
+.chip-SECRET { background: #f2dfd9; border-color: #d4a296; color: #6a2a1d; }
 .chip-URL,
-.chip-IP { background: #e2e8f0; border-color: #cbd5e1; color: #0f172a; }
-.chip-OTHER { background: #f1f5f9; border-color: #cbd5e1; color: #334155; }
+.chip-IP { background: #e6e3da; border-color: #c9c3b2; color: #3b382f; }
+.chip-OTHER { background: #efece4; border-color: #d3cdbd; color: #4a4739; }
 
 /* Search hits in the transcript. Amber for every match, a hard outline on the
    one currently being looked at -- a transcript is several screens long, and
@@ -76,12 +97,15 @@ body {
   outline-offset: 2px;
 }
 
+/* Reduced motion is an explicit alternative, not a global kill. Colour fades
+   stay (they move nothing); the one piece of movement, the progress fill, jumps
+   to its value instead of sliding there, and smooth scrolling is turned off. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+  html {
+    scroll-behavior: auto;
+  }
+  [data-slot="progress-indicator"] {
+    transition: none;
   }
 }
 
@@ -134,32 +158,11 @@ body {
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  /* The app's action colour is blue-700, not the library's neutral. Progress
-     paints its indicator from --primary and offers no className for it, and the
-     focus ring reads --ring, so the identity lives in the tokens themselves. */
-  --primary: #1d4ed8;
+  /* The one accent. Shadcn's primary, the focus ring and the progress fill all
+     read these, so they carry the same ledger green as the button. */
+  --primary: #1f5a46;
   --primary-foreground: #ffffff;
-  /* The blue scale the interface actually uses, restored to Tailwind's values.
-     shadcn rewrites every `--color-blue-*` to its own indigo, so `bg-blue-700`
-     on the primary button was painting #4338ca-ish rather than the #1d4ed8 the
-     design doc names as the one accent. The tokens file was right and the screen
-     was wrong, which is the worst way to be wrong: nothing errored. */
-  /* slate-500 sits at 4.35:1 on this app's own panel colour and 4.48:1 on
-     white — under the 4.5:1 floor for body text, 205 times over. Tailwind's
-     value was never wrong in general, only against this ground. One shade
-     darker clears it on both surfaces with room to spare. */
-  --color-slate-500: #5b6a82;
-  --color-blue-50: #eff6ff;
-  --color-blue-300: #93c5fd;
-  --color-blue-700: #1d4ed8;
-  --color-blue-800: #1e40af;
-  --color-blue-900: #1e3a8a;
-  /* Restated as a --color-* token because Tailwind v4 resolves bg-primary
-     through --color-primary, and the library's own :root declares that name as
-     its indigo. Declaring only --primary left every primary button in the app
-     wearing shadcn's default blue while the design doc called for #1d4ed8 —
-     the palette was right in the token file and wrong on screen. */
-  --color-primary: #1d4ed8;
+  --color-primary: #1f5a46;
   --color-primary-foreground: #ffffff;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -170,7 +173,7 @@ body {
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: #1d4ed8;
+  --ring: #1f5a46;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -250,81 +253,68 @@ body {
   }
 }
 
-/* Dark theme. The app leans on literal palette utilities, so the theme is a set
-   of overrides scoped to .dark. These rules sit outside Tailwind's layers, so
-   they win over the utilities without touching every component. */
+/* Dark theme. Every stone and accent utility reads its colour from these
+   variables, so redefining them here re-colours text, borders and fills at once.
+   Only the semantic reds and ambers, the chips and a few focus rules need rules. */
 :root {
   color-scheme: light;
 }
 
 .dark {
   color-scheme: dark;
-  --color-paper: #0b1120;
-  --color-ink: #e5e7eb;
-  --primary: #2563eb;
-  --primary-foreground: #ffffff;
-  --ring: #2563eb;
-  --surface: #0f172a;
-  --surface-2: #111c34;
-  --line: #1e293b;
-  --line-2: #334155;
-  --hover: #1b2740;
-  --ink-2: #cbd5e1;
-  --ink-3: #94a3b8;
-  --accent-ink: #93c5fd;
+  --color-paper: #12110e;
+  --color-sheet: #1a1915;
+  --color-ink: #ece8dc;
+  --color-stone-50: #1f1e19;
+  --color-stone-100: #272620;
+  --color-stone-200: #33312a;
+  --color-stone-300: #4a463c;
+  --color-stone-400: #6e6a5d;
+  --color-stone-500: #a7a291;
+  --color-stone-600: #c4bfae;
+  --color-stone-700: #d5d0c0;
+  --color-stone-800: #e6e2d5;
+  --color-stone-900: #f4f1e8;
+  --color-accent-50: #1c2d27;
+  --color-accent-100: #24392f;
+  --color-accent-300: #2f6652;
+  --color-accent-700: #2f7a60;
+  --color-accent-800: #3f8a70;
+  --color-accent-900: #b9ded0;
+  --accent-ink: #8fd0b3;
+  --primary: #2f7a60;
+  --color-primary: #2f7a60;
+  --ring: #3f8a70;
+  --color-ring: #3f8a70;
 }
 
-.dark .bg-white { background-color: var(--surface); }
-.dark .bg-slate-50 { background-color: var(--surface-2); }
-.dark .bg-slate-100 { background-color: var(--hover); }
-.dark .bg-slate-200 { background-color: var(--line-2); }
-.dark .bg-blue-50 { background-color: #172554; }
+/* Accent used as text reads too dark on the dark sheet, so it lifts. */
+.dark .text-accent-700 { color: var(--accent-ink); }
+.dark .text-accent-800 { color: var(--accent-ink); }
+.dark .ring-accent-300 { --tw-ring-color: #2f6652; }
 .dark .bg-red-50 { background-color: #3b1d1d; }
 .dark .bg-amber-50 { background-color: #3a2c12; }
-.dark .hover\:bg-slate-50:hover { background-color: var(--hover); }
-.dark .hover\:bg-blue-800:hover { background-color: #1e40af; }
-
-.dark .text-slate-900 { color: #f1f5f9; }
-.dark .text-slate-800 { color: #e2e8f0; }
-.dark .text-slate-700 { color: var(--ink-2); }
-.dark .text-slate-600 { color: var(--ink-2); }
-.dark .text-slate-500 { color: var(--ink-3); }
-.dark .text-slate-400 { color: #7c8aa0; }
-.dark .text-slate-300 { color: #64748b; }
-.dark .text-blue-700 { color: var(--accent-ink); }
-/* Each of these is paired with a tinted background that IS overridden above.
-   A missing text override is the one half of the pair that fails silently:
-   the surface darkens, the ink does not, and the result is dark-on-dark.
-   `text-blue-900` on `bg-blue-50` shipped exactly that way. */
-.dark .text-blue-900 { color: #dbeafe; }
-.dark .text-blue-800 { color: #bfdbfe; }
-.dark .text-emerald-700 { color: #6ee7b7; }
+.dark .text-red-700 { color: #fca5a5; }
+.dark .text-red-800 { color: #fecaca; }
+.dark .text-red-900 { color: #fee2e2; }
 .dark .text-amber-700 { color: #fcd34d; }
 .dark .text-amber-800 { color: #fde68a; }
 .dark .text-amber-900 { color: #fef3c7; }
-.dark .text-red-800 { color: #fecaca; }
-.dark .text-red-900 { color: #fee2e2; }
-
-.dark .border-slate-100 { border-color: var(--line); }
-.dark .border-slate-200 { border-color: var(--line); }
-.dark .border-slate-300 { border-color: var(--line-2); }
 .dark .border-red-400 { border-color: #7f1d1d; }
 .dark .border-amber-400 { border-color: #78350f; }
+.dark .hit { background: #713f12; color: #fef9c3; }
+.dark .hit-current { background: #f59e0b; color: #1c1917; }
 
-.dark .ring-blue-300 { --tw-ring-color: #1d4ed8; }
+/* Focus on a bordered field must still show in dark mode. These sit outside the
+   Tailwind layers, so they win the same cascade fight as the rules above. */
+.dark .border-stone-400 { border-color: var(--accent-ink); }
+.dark .border-stone-300:focus,
+.dark .border-stone-400:focus { border-color: var(--accent-ink); }
 
-.dark .hover\:text-slate-900:hover { color: #f1f5f9; }
-.dark .hover\:text-slate-800:hover { color: #e2e8f0; }
-.dark .hover\:text-slate-700:hover { color: var(--ink-2); }
-.dark .hover\:text-slate-600:hover { color: var(--ink-2); }
-
-.dark .placeholder\:text-slate-400::placeholder { color: #64748b; }
-
-/* Chips: same type→colour mapping, darkened so they read on the dark page. */
-.dark .chip-PERSON { background: #1e3a8a; border-color: #1e40af; color: #dbeafe; }
-.dark .chip-ADDRESS { background: #14532d; border-color: #166534; color: #dcfce7; }
-.dark .chip-PHONE { background: #78350f; border-color: #92400e; color: #fef3c7; }
-.dark .chip-EMAIL { background: #4c1d95; border-color: #5b21b6; color: #ede9fe; }
+.dark .chip-PERSON { background: #1f2d3d; border-color: #34506e; color: #c9dbee; }
+.dark .chip-ADDRESS { background: #1d2e22; border-color: #3a5c42; color: #c6e4cd; }
+.dark .chip-PHONE { background: #3a2e14; border-color: #6d5524; color: #f1dfa9; }
+.dark .chip-EMAIL { background: #2c2338; border-color: #4f3f6b; color: #dcd0ef; }
 .dark .chip-PASSPORT,
 .dark .chip-INN,
 .dark .chip-SNILS,
@@ -332,22 +322,28 @@ body {
 .dark .chip-CARD,
 .dark .chip-DRIVER_LICENSE,
 .dark .chip-MILITARY_ID,
-.dark .chip-BIRTH_CERTIFICATE { background: #7f1d1d; border-color: #991b1b; color: #fee2e2; }
+.dark .chip-BIRTH_CERTIFICATE,
+.dark .chip-OGRNIP,
+.dark .chip-SECRET { background: #3c201b; border-color: #6b3a30; color: #f2cdc5; }
 .dark .chip-URL,
-.dark .chip-IP { background: #334155; border-color: #475569; color: #e2e8f0; }
-.dark .chip-OTHER { background: #1e293b; border-color: #334155; color: #cbd5e1; }
-.dark .hit { background: #713f12; color: #fef9c3; }
-.dark .hit-current { background: #f59e0b; color: #1c1917; }
-/* Focus and error colours for dark theme.
-   `.dark .border-slate-200` above sits outside the Tailwind layers, so it beats
-   `focus:border-slate-400` on the cascade order and the focus ring on every
-   input simply never appeared in dark mode. These have to sit outside too, or
-   they lose the same fight. */
-.dark .border-slate-400 { border-color: var(--accent-ink); }
-.dark .border-slate-300:focus,
-.dark .border-slate-400:focus { border-color: var(--accent-ink); }
-.dark .text-red-700 { color: #fca5a5; }
-.dark .bg-red-50 .text-red-900 { color: #fee2e2; }
+.dark .chip-IP { background: #2c2a24; border-color: #4a4739; color: #dcd8cb; }
+.dark .chip-OTHER { background: #222019; border-color: #3f3c33; color: #c9c4b5; }
+
+/* The history rail stays in view while a long document scrolls. Desktop only: below lg the rail
+   sits under the document, and pinning it there would cover the document. The top is the header's
+   measured bottom (--header-h, written by App) plus a gap. The rail scrolls inside itself when the
+   history is taller than the window, and the padding keeps focus rings from being clipped. */
+@media (min-width: 1024px) {
+  .rail {
+    position: sticky;
+    top: calc(var(--header-h, 69px) + 1.5rem);
+    max-height: calc(100vh - var(--header-h, 69px) - 3rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 0.25rem 0.5rem;
+    margin: 0 -0.25rem;
+  }
+}
 
 /* -------------------------------------------------------------------- print
    Paper is not a screen: controls that need a click are noise on it, and the
@@ -370,31 +366,31 @@ body {
 /* ---------------------------------------------------------- browser surfaces
    The parts of the page nobody draws and everybody uses: selection, scrollbars,
    underlines, caret. Left on defaults they carry the browser's own palette,
-   which here is a saturated system blue against a quiet slate ground — the one
+   which here is a saturated system blue against warm paper — the one
    place in the interface where something bright blue appears that we did not
    choose. */
 
 /* Selection. Ink goes dark on the accent rather than light on dark, so the
    copied text stays readable whichever way the user swipes. */
-::selection { background: #bfdbfe; color: #0f172a; }
-.dark ::selection { background: #1e40af; color: #eff6ff; }
+::selection { background: #cfe3d8; color: #1d1b16; }
+.dark ::selection { background: #2c5a4a; color: #e6f0eb; }
 
 /* Scrollbars. WebKit needs the pseudo-elements; Firefox takes the standard
    pair. Thumb only — a full track would draw a second frame around every
    scrollable box the interface already frames with a hairline. */
-* { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
-.dark * { scrollbar-color: #475569 transparent; }
+* { scrollbar-width: thin; scrollbar-color: #cdc6b6 transparent; }
+.dark * { scrollbar-color: #4a463c transparent; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
+  background-color: #cdc6b6;
   border: 3px solid transparent;
   border-radius: 9999px;
   background-clip: content-box;
 }
-.dark ::-webkit-scrollbar-thumb { background-color: #475569; }
-::-webkit-scrollbar-thumb:hover { background-color: #94a3b8; }
-.dark ::-webkit-scrollbar-thumb:hover { background-color: #64748b; }
+.dark ::-webkit-scrollbar-thumb { background-color: #4a463c; }
+::-webkit-scrollbar-thumb:hover { background-color: #a29b8a; }
+.dark ::-webkit-scrollbar-thumb:hover { background-color: #6e6a5d; }
 
 /* Underlines. Default offset puts the line through the descenders of «ц»,
    «й» and «р», which in this typeface reads as a strike. */
@@ -402,8 +398,8 @@ a, button, .focus-ring { text-underline-offset: 0.18em; }
 a { text-decoration-thickness: from-font; }
 
 /* Caret. Same accent as the focus ring, so typing looks like it belongs. */
-:root { caret-color: #1d4ed8; }
-.dark { caret-color: #93c5fd; }
+:root { caret-color: #1f5a46; }
+.dark { caret-color: #8fd0b3; }
 
 /* --------------------------------------------------------------- zoom & text
 

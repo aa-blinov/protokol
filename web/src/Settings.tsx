@@ -165,17 +165,17 @@ function ModelPicker({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`${FIELD} flex w-full items-center justify-between gap-3 text-left text-sm hover:bg-slate-50`}
+        className={`${FIELD} flex w-full items-center justify-between gap-3 text-left text-sm hover:bg-stone-50`}
       >
         <span className="min-w-0 truncate font-mono text-[13px]">
-          {selected ? selected.id : <span className="text-slate-500">Модель не выбрана</span>}
+          {selected ? selected.id : <span className="text-stone-500">Модель не выбрана</span>}
         </span>
-        <Search aria-hidden className="h-4 w-4 shrink-0 text-slate-500" />
+        <Search aria-hidden className="h-4 w-4 shrink-0 text-stone-500" />
       </button>
 
       {open ? (
-        <div className="absolute z-30 mt-1 w-full min-w-0 max-w-full overflow-hidden rounded border border-slate-300 bg-white">
-          <div className="border-b border-slate-200 p-2">
+        <div className="absolute z-30 mt-1 w-full min-w-0 max-w-full overflow-hidden rounded border border-stone-300 bg-sheet">
+          <div className="border-b border-stone-200 p-2">
             <input
               autoFocus
               value={query}
@@ -197,14 +197,14 @@ function ModelPicker({
               placeholder="Начните вводить название…"
               // The project ring, not a border tint: this input was the only
               // focusable thing in the app that dropped the outline, and a 1px
-              // slate-400 border on slate-200 is far too quiet to navigate by.
+              // stone-400 border on stone-200 is far too quiet to navigate by.
               // focus: also fires on mouse press, which is the wrong way round.
-              className="focus-ring w-full rounded border border-slate-200 px-2 py-1.5 font-mono text-[13px] focus:border-slate-400"
+              className="focus-ring w-full rounded border border-stone-200 px-2 py-1.5 font-mono text-[13px] focus:border-stone-400"
             />
           </div>
           <ul ref={listRef} role="listbox" className="max-h-64 overflow-y-auto py-1">
             {matches.length === 0 ? (
-              <li className="px-3 py-3 text-sm text-slate-500">Ничего не найдено</li>
+              <li className="px-3 py-3 text-sm text-stone-500">Ничего не найдено</li>
             ) : (
               matches.map((model, index) => (
                 <li key={model.id} role="option" aria-selected={model.id === value}>
@@ -219,11 +219,11 @@ function ModelPicker({
                     onMouseEnter={() => setActive(index)}
                     onClick={() => pick(model.id)}
                     className={`flex w-full items-baseline justify-between gap-3 px-3 py-1.5 text-left ${
-                      index === active ? "bg-slate-100" : ""
+                      index === active ? "bg-stone-100" : ""
                     }`}
                   >
                     <span className="min-w-0 truncate font-mono text-[13px]">{model.id}</span>
-                    <span className="shrink-0 text-xs text-slate-500">
+                    <span className="shrink-0 text-xs text-stone-500">
                       {formatPrice(model.prompt_price)}
                       {model.context ? ` ${formatContext(model.context)}` : ""}
                     </span>
@@ -366,7 +366,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
           {SERVICES.map((s) => (
             <option key={s.id} value={s.id}>
               {s.label}
-              {state?.saved_keys?.[s.baseUrl] ? " — ключ сохранён" : ""}
+              {state?.saved_keys?.[s.baseUrl] ? " (ключ сохранён)" : ""}
             </option>
           ))}
         </select>
@@ -382,7 +382,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
           aria-label="Адрес сервиса"
           className={`${FIELD} mt-2 w-full font-mono text-sm`}
         />
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-stone-500">
           {service
             ? `Ключ этого сервиса начинается с ${service.keyHint}.`
             : "Свой адрес: подойдёт любой сервис с OpenAI-совместимым API."}{" "}
@@ -403,7 +403,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
               savedHint
                 ? `сохранён ${savedHint}. Вставьте новый, чтобы заменить`
                 : service
-                  ? `ключ ${service.keyHint} — вставьте сюда`
+                  ? `ключ ${service.keyHint}, вставьте сюда`
                   : "вставьте ключ сюда"
             }
             onChange={(event) => setKey(event.target.value)}
@@ -421,9 +421,9 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
             {reveal ? <EyeOff aria-hidden className="h-4 w-4" /> : <Eye aria-hidden className="h-4 w-4" />}
           </Button>
         </div>
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-stone-500">
           {savedHint ? "Ключ сохранён, заново вводить его не нужно." : "Ключ пока не задан."}{" "}
-          <a className="text-blue-700 underline" href={service?.keyPage ?? state?.key_page ?? "https://openrouter.ai/keys"} target="_blank" rel="noreferrer">
+          <a className="text-accent-700 underline" href={service?.keyPage ?? state?.key_page ?? "https://openrouter.ai/keys"} target="_blank" rel="noreferrer">
             Получить ключ
           </a>
         </p>
@@ -442,7 +442,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
                 className={`${FIELD} mt-2 w-full font-mono text-sm`}
               />
             ) : null}
-            <p className="mt-2 text-xs text-slate-600">
+            <p className="mt-2 text-xs text-stone-600">
               {models.length
                 ? `Доступно моделей: ${models.length}.`
                 : "Сервис не показал список. Впишите название модели вручную."}
@@ -450,7 +450,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
             </p>
           </>
         ) : (
-          <div className="rounded border border-dashed border-slate-300 px-3 py-4 text-sm text-slate-500">
+          <div className="rounded border border-dashed border-stone-300 px-3 py-4 text-sm text-stone-500">
             Введите адрес и ключ выше и нажмите «Проверить ключ». После проверки появится список моделей.
           </div>
         )}
@@ -471,13 +471,13 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
           aria-label="Свои требования к выжимке"
           className={`${FIELD} mt-3 w-full resize-y text-sm`}
         />
-        <p className="mt-2 text-xs text-slate-600">
+        <p className="mt-2 text-xs text-stone-600">
           Инструкции о персональных данных остаются в силе при любом выборе.
         </p>
       </Section>
 
       {message.text ? (
-        <p className={`text-sm ${message.tone === "ok" ? "text-slate-700" : message.tone === "bad" ? "text-red-700" : "text-slate-600"}`}>
+        <p className={`text-sm ${message.tone === "ok" ? "text-stone-700" : message.tone === "bad" ? "text-red-700" : "text-stone-600"}`}>
           {message.text}
         </p>
       ) : null}

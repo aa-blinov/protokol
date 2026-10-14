@@ -33,17 +33,17 @@ export function Toasts({
           key={notice.id}
           role="alert"
           aria-live={notice.tone === "bad" ? "assertive" : "polite"}
-          className={`pointer-events-auto flex max-w-xl items-start gap-3 rounded border px-4 py-3 shadow-lg ${
+          className={`pointer-events-auto flex max-w-xl items-start gap-3 rounded border px-4 py-3 ${
             notice.tone === "bad"
               ? "border-red-300 bg-red-50 text-red-900"
-              : "border-emerald-300 bg-emerald-50 text-emerald-900"
+              : "border-accent-300 bg-accent-50 text-accent-900"
           }`}
         >
           <p className="min-w-0 flex-1 text-sm">{notice.text}</p>
           <button
             onClick={() => onDismiss(notice.id)}
             aria-label="Закрыть"
-            className="focus-ring -mr-1 grid h-6 w-6 shrink-0 place-items-center rounded hover:bg-black/5"
+            className="focus-ring relative -mr-1 grid h-6 w-6 shrink-0 place-items-center rounded hover:bg-black/5 before:absolute before:-inset-2.5 before:content-['']"
           >
             <X aria-hidden className="h-4 w-4" />
           </button>
