@@ -3,7 +3,8 @@
 The upstream ``pii_ner.py`` shipped with the model is CUDA-only: its
 ``OnnxBackend`` refuses to start without the CUDA provider. The graphs are
 ordinary BERT token-classification graphs, so this module runs the same
-``model.optimized.fp32.onnx`` on CPUExecutionProvider and keeps upstream's
+``model.optimized.fp16.onnx`` (upstream's fp16 export of the same weights, half the
+size of fp32 with the same benchmark F1) on CPUExecutionProvider and keeps upstream's
 windowing and span decoding unchanged.
 
 Window/decoding helpers are adapted from ``lockR/rubert-base-pii-ner-onnx``
@@ -117,7 +118,7 @@ class PiiNer:
         for filename in ("config.json", "tokenizer.json", "tokenizer_config.json"):
             if not (self.model_dir / filename).is_file():
                 raise FileNotFoundError(f"Missing model artifact: {self.model_dir / filename}")
-        model_path = self.model_dir / "model.optimized.fp32.onnx"
+        model_path = self.model_dir / "model.optimized.fp16.onnx"
         if not model_path.is_file():
             raise FileNotFoundError(f"Missing model artifact: {model_path}")
 

@@ -37,23 +37,6 @@ class TranscribeResponse(BaseModel):
     duration_sec: float
 
 
-class LLMRequest(BaseModel):
-    masked_text: str
-    model: str = DEFAULT_MODEL
-    entity_map: dict[str, str] = Field(
-        default_factory=dict,
-        description="Optional; when given the reply is de-masked back to the originals",
-    )
-
-
-class LLMResponse(BaseModel):
-    reply: str = Field(description="Model output, still masked")
-    reply_unmasked: str = Field(description="Placeholders restored to original values")
-    model: str
-    tokens_in: int | None = None
-    tokens_out: int | None = None
-
-
 class SpeakerSegment(BaseModel):
     speaker: int = Field(description="Speaker index, 0-based")
     start: float = Field(description="Turn start, seconds")
@@ -198,6 +181,9 @@ class SummarizeResult(BaseModel):
     tokens_out: int | None = None
     cost: dict[str, float | None] = Field(default_factory=dict)
     timings: dict[str, float] = Field(default_factory=dict)
+    # Things the user should look at before trusting the summary, e.g. a placeholder
+    # the model invented. Empty when the reply checks out.
+    warnings: list[str] = Field(default_factory=list)
 
 
 class EstimateRequest(BaseModel):

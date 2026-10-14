@@ -4,6 +4,8 @@ leak PII if it is wrong."""
 from __future__ import annotations
 
 import sys
+
+import pytest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -139,6 +141,13 @@ def test_unmask_needs_a_word_boundary():
     assert unmask("XPERSON_1X", entity_map) == "XPERSON_1X"
 
 
+def test_unmask_keeps_a_russian_ending_on_a_bare_token():
+    """The model writes the token without brackets and the case ending glued on."""
+    entity_map = {"PERSON_1": "Иван"}
+    assert unmask("PERSON_1а подписал", entity_map) == "Ивана подписал"
+    assert unmask("PERSON_1-а подписал", entity_map) == "Иван-а подписал"
+
+
 def test_unknown_token_is_left_alone():
     """A token with no entry cannot be substituted and must stay visible.
 
@@ -183,3 +192,118 @@ def test_offset_invariant_holds():
     )
     for entity in result.entities:
         assert text[entity.start : entity.end] == entity.text
+
+
+def test_one_person_in_several_cases_is_one_token():
+    text = "Ольга Николаевна, Ольги Николаевны Смирновой и Ольге Николаевне."
+    result = mask(
+        text,
+        [
+            find(text, "Ольга Николаевна", "FIRST_NAME"),
+            find(text, "Ольги Николаевны Смирновой", "LAST_NAME"),
+            find(text, "Ольге Николаевне", "FIRST_NAME"),
+        ],
+    )
+    assert result.entity_map == {"PERSON_1": "Ольга Николаевна Смирнова"}
+    assert result.masked_text.count("[PERSON_1]") == 3
+
+
+def test_bare_surname_joins_the_full_name_it_belongs_to():
+    text = "Иван Сергеевич Петров решил. Петрову я напомню сам."
+    result = mask(
+        text,
+        [
+            find(text, "Иван Сергеевич Петров", "LAST_NAME"),
+            find(text, "Петрову", "LAST_NAME"),
+        ],
+    )
+    assert result.entity_map == {"PERSON_1": "Иван Сергеевич Петров"}
+    assert "Петрову" not in result.masked_text
+
+
+def test_ambiguous_short_name_gets_its_own_token():
+    """A bare surname that fits two different Petrovs must not be guessed at."""
+    text = "Иван Петров, Пётр Петров и Петров заметил."
+    result = mask(
+        text,
+        [
+            find(text, "Иван Петров", "LAST_NAME"),
+            find(text, "Пётр Петров", "LAST_NAME"),
+            find(text, "Петров", "LAST_NAME", occurrence=2),
+        ],
+    )
+    assert result.entity_map["PERSON_1"] == "Иван Петров"
+    assert result.entity_map["PERSON_2"] == "Пётр Петров"
+    assert result.entity_map["PERSON_3"] == "Петров"
+
+
+def test_case_tag_restores_the_name_in_that_case():
+    entity_map = {"PERSON_1": "Иван Сергеевич Петров", "PERSON_2": "Ольга Николаевна Смирнова"}
+    assert unmask("[PERSON_2|dat] нужно передать документы", entity_map) == (
+        "Ольге Николаевне Смирновой нужно передать документы"
+    )
+    assert unmask("Поручение [PERSON_1|gen].", entity_map) == "Поручение Ивана Сергеевича Петрова."
+
+
+def test_no_tag_means_nominative_and_non_person_tags_are_ignored():
+    entity_map = {"PERSON_1": "Иван Петров", "PHONE_1": "+7 900 123-45-67"}
+    assert unmask("[PERSON_1] подписал", entity_map) == "Иван Петров подписал"
+    assert unmask("[PHONE_1|gen]", entity_map) == "+7 900 123-45-67"
+
+
+def test_preposition_sets_the_case_when_the_model_left_no_tag():
+    entity_map = {"PERSON_2": "Ольга Николаевна Смирнова"}
+    assert unmask("Согласование для [PERSON_2] дальше", entity_map) == (
+        "Согласование для Ольги Николаевны Смирновой дальше"
+    )
+    assert unmask("передать документы [PERSON_2]", entity_map) == "передать документы Ольга Николаевна Смирнова"
+
+
+def test_an_explicit_tag_beats_the_preposition():
+    entity_map = {"PERSON_2": "Ольга Николаевна Смирнова"}
+    assert unmask("для [PERSON_2|dat]", entity_map) == "для Ольге Николаевне Смирновой"
+
+
+def test_ambiguous_preposition_does_not_guess():
+    entity_map = {"PERSON_2": "Ольга Николаевна Смирнова"}
+    assert unmask("на [PERSON_2]", entity_map) == "на Ольга Николаевна Смирнова"
+
+
+def test_unknown_tokens_lists_only_what_the_map_cannot_restore():
+    from masking import unknown_tokens
+
+    entity_map = {"PERSON_1": "Иван Петров"}
+    assert unknown_tokens("[PERSON_1] и [PERSON_9] и PERSON_9", entity_map) == ["PERSON_9"]
+    assert unknown_tokens("XPERSON_7X и [PERSON_1|gen]", entity_map) == []
+
+
+def test_requirement_binds_names_and_refuses_unknown_people():
+    from masking import UnboundRequirement, bind_requirements
+
+    entity_map = {"PERSON_1": "Иван Сергеевич Петров", "PHONE_1": "+7 916 555-01-02"}
+    text = "Выдели решения, которые озвучил Петрову"
+    assert bind_requirements(text, [find(text, "Петрову", "LAST_NAME")], entity_map) == (
+        "Выдели решения, которые озвучил [PERSON_1]"
+    )
+    text = "Спроси про Марию Иванову"
+    with pytest.raises(UnboundRequirement) as raised:
+        bind_requirements(text, [find(text, "Марию Иванову", "FIRST_NAME")], entity_map)
+    assert raised.value.surfaces == ["Марию Иванову"]
+
+
+def test_requirement_refuses_an_ambiguous_name():
+    from masking import UnboundRequirement, bind_requirements
+
+    entity_map = {"PERSON_1": "Иван Петров", "PERSON_2": "Пётр Петров"}
+    text = "Что сказал Петров?"
+    with pytest.raises(UnboundRequirement):
+        bind_requirements(text, [find(text, "Петров", "LAST_NAME")], entity_map)
+
+
+def test_place_found_by_the_rules_gets_the_address_placeholder():
+    # The rules label a place after a preposition LOCATION; the model labels address parts
+    # ADDRESS. Both must show the same placeholder type, or the LLM sees two kinds of address.
+    text = "Встретимся в Тверской у метро"
+    result = mask(text, [find(text, "Тверской", "LOCATION")])
+    assert "[ADDRESS_1]" in result.masked_text
+    assert unmask(result.masked_text, result.entity_map) == text

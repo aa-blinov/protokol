@@ -47,6 +47,16 @@ WEB_DIST_DIR = Path(os.getenv("WEB_DIST_DIR", Path(__file__).resolve().parents[1
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL", "deepseek/deepseek-v4.1-flash")
+# What the provider may do with the prompt. "deny" keeps requests away from
+# providers that store prompts non-transiently or train on them. OpenRouter's own
+# default is "allow", so the app asks for "deny" unless told otherwise.
+LLM_DATA_COLLECTION = os.getenv("LLM_DATA_COLLECTION", "deny")
+# Zero data retention: only endpoints with a ZDR policy. Off by default, because a
+# model may have no such endpoint at all, and then the request fails loudly.
+LLM_ZDR = os.getenv("LLM_ZDR", "0") == "1"
+# How hard the summary model reasons before it answers: "", "low", "medium", "high".
+# Empty leaves the provider's default in place.
+LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "")
 
 # Inference threads. Kept modest so the app stays responsive while a model runs.
 INFERENCE_THREADS = int(os.getenv("INFERENCE_THREADS", "4"))

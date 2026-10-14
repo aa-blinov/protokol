@@ -23,18 +23,27 @@ import settings
 
 MAX_ENTRIES = 8
 
+# Bump whenever recognition or diarization output changes for the same audio. The
+# key covers the recording, the format and the model, but not the code: without a
+# version an entry written by the previous code is returned as if it were current.
+# 2: diarization folds slivers by seconds; 3: word-separator bonus on CTC;
+# 4: GigaAM v3 e2e RNN-T head with 20 s chunks; 5: clustering threshold 0.46 and
+# the speaker-turn join that keeps the later end.
+PIPELINE_VERSION = 5
+
 
 def key_for(audio: bytes, suffix: str) -> str:
-    """Digest of the recording, the format and the ASR model.
+    """Digest of the recording, the format, the ASR model and the pipeline version.
 
-    All three, because each of them changes the transcript on its own: the same
-    bytes named .m4a and .mp3 can decode differently, and a different model
-    directory means a different transcript for the same audio. Truncated to 24
-    hex digits -- this identifies a cache file, it is not a security boundary.
+    All of them change the transcript on their own: the same bytes named .m4a and
+    .mp3 can decode differently, a different model directory means a different
+    transcript for the same audio, and a code change alters the output with no
+    change to the audio at all. Truncated to 24 hex digits -- this identifies a
+    cache file, it is not a security boundary.
     """
     digest = hashlib.sha256()
     digest.update(audio)
-    digest.update(f"|{suffix}|{config.GIGAAM_DIR}".encode())
+    digest.update(f"|{suffix}|{config.GIGAAM_DIR}|v{PIPELINE_VERSION}".encode())
     return digest.hexdigest()[:24]
 
 

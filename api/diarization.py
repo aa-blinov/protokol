@@ -53,8 +53,12 @@ _MIN_EMBED_SECONDS = 0.4
 _SPEECH_THRESHOLD = 0.5
 # Average cosine similarity below which two clusters are different speakers.
 # CAM++ embeddings sit higher on the scale than ERes2Net's, so this is lower
-# than the 0.8 that model needed.
-_CLUSTER_THRESHOLD = 0.42
+# than the 0.8 that model needed. Chosen by measurement, not by the old default:
+# mean DER over 43 VoxConverse dev recordings was 26.2% at 0.34, 23.9% at 0.38,
+# 23.6% at 0.42 (the old value), 22.8% at 0.46, 22.1% at 0.50 and 22.6% at 0.54;
+# over three AMI meetings it was 33.9% at 0.46 against 36.2% at 0.42. 0.46 is the
+# best sum of the two. Dialogue, two-reader and two-party benchmarks are unchanged.
+_CLUSTER_THRESHOLD = 0.46
 # A cluster this small (in turns) is noise, not a speaker; fold it into the
 # nearest one instead of inventing a speaker for it.
 _MIN_CLUSTER_TURNS = 2
@@ -64,12 +68,11 @@ _MIN_CLUSTER_TURNS = 2
 _MIN_CLUSTER_SHARE = 0.02
 # ...and only if it is also a few seconds of voice. On a two-hour call 2% is
 # 144 s, so a real quiet speaker (110 s) would pass the share test alone.
-# ponytail: 20 s is a guess from the few-second slivers; calibrate on a real call.
+# Measured on a labelled two-speaker recording (Dialogs) and a real 1996 interview:
+# 5 s and 10 s leave 6 and 3 labels on the interview, because its spurious clusters
+# hold 5-20 s of voice; 20 s gives the right 2 labels on both. The one thing not
+# measured here is a seven-speaker call with a quiet participant under 20 s.
 _MAX_FRAGMENT_SECONDS = 20.0
-# Only fold slivers when the clustering is clearly over-segmented. A real call
-# can have seven speakers; folding at six would merge one of them away, so the
-# gate sits well above a plausible meeting size.
-_MAX_TRUSTED_SPEAKERS = 10
 
 
 @dataclass(frozen=True)
@@ -88,7 +91,9 @@ def merge_turns(turns: list[Turn], gap: float = 0.5, max_seconds: float = 120.0)
     for turn in turns:
         if merged and merged[-1].speaker == turn.speaker and turn.start - merged[-1].end <= gap:
             previous = merged[-1]
-            merged[-1] = Turn(previous.start, turn.end, turn.speaker)
+            # Overlapping turns of one speaker can come in any order: the join must
+            # keep the later end, or a contained turn would shorten the one before it.
+            merged[-1] = Turn(previous.start, max(previous.end, turn.end), turn.speaker)
         else:
             merged.append(turn)
     split: list[Turn] = []
@@ -187,7 +192,7 @@ def fold_small_clusters(
     labels: list[int],
     weights: list[float],
     min_share: float = _MIN_CLUSTER_SHARE,
-    max_seconds: float = _MAX_FRAGMENT_SECONDS,
+    max_seconds: float | None = None,
 ) -> list[int]:
     """Fold clusters that are a sliver of the recording into their nearest neighbour.
 
@@ -202,6 +207,8 @@ def fold_small_clusters(
     """
     if len(embeddings) == 0 or min_share <= 0:
         return labels
+    if max_seconds is None:
+        max_seconds = _MAX_FRAGMENT_SECONDS
     total = float(sum(weights))
     if total <= 0:
         return labels
@@ -333,10 +340,10 @@ class Diarizer:
                 [self._embed(samples[int(t.start * SAMPLE_RATE) : int(t.end * SAMPLE_RATE)]) for t in long_enough]
             )
             labels = cluster_embeddings(embeddings, self.cluster_threshold)
-            # Only fold slivers when the clustering is clearly over-segmented;
-            # below the gate a small cluster is probably a real, quiet speaker.
-            if len(set(labels)) > _MAX_TRUSTED_SPEAKERS:
-                labels = fold_small_clusters(embeddings, labels, [t.end - t.start for t in long_enough])
+            # A fragment is judged by its seconds of speech, not by how many speakers
+            # the clustering produced: a count gate let nine labels through as a
+            # "plausible meeting" when eight of them were slivers.
+            labels = fold_small_clusters(embeddings, labels, [t.end - t.start for t in long_enough])
             labelled = [Turn(t.start, t.end, label) for t, label in zip(long_enough, labels)]
             borrowed = _borrow_short_turns(turns, labelled)
         return merge_turns(sorted(labelled + borrowed, key=lambda t: t.start))

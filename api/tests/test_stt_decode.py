@@ -118,30 +118,33 @@ def test_decodes_other_containers(container, codec):
 
 
 def test_split_long_leaves_audio_that_fits_untouched():
-    samples = np.full(int(30 * TARGET_SAMPLE_RATE), 5000, dtype=np.int16)
+    samples = np.full(int(SEGMENT_MAX_SECONDS * TARGET_SAMPLE_RATE * 0.9), 5000, dtype=np.int16)
     chunks = Stt._split_long(samples)
     assert len(chunks) == 1
     assert chunks[0] is samples
 
 
 def test_split_long_covers_every_sample_and_respects_the_cap():
-    # 5 minutes -> at least ceil(300 / 120) = 3 chunks.
+    # 5 minutes -> at least ceil(300 / SEGMENT_MAX_SECONDS) chunks.
     total = int(300 * TARGET_SAMPLE_RATE)
     samples = np.full(total, 5000, dtype=np.int16)
     chunks = Stt._split_long(samples)
-    assert len(chunks) >= 3
+    assert len(chunks) >= int(np.ceil(300 / SEGMENT_MAX_SECONDS))
     assert sum(len(chunk) for chunk in chunks) == total
     assert all(len(chunk) <= int(SEGMENT_MAX_SECONDS * TARGET_SAMPLE_RATE) + 1 for chunk in chunks)
 
 
 def test_split_long_cuts_on_the_quietest_frame_near_the_limit():
-    # A tone with one clear silence inside the search window of the first
-    # chunk (the last 40% before 120 s). The cut must land in that silence,
-    # not at a fixed 120 s grid line.
-    total = int(300 * TARGET_SAMPLE_RATE)
+    # A tone with one clear silence inside the search window of the first chunk
+    # (the last 40% before the limit). The cut must land in that silence, not at
+    # a fixed grid line at the limit.
+    limit = int(SEGMENT_MAX_SECONDS * TARGET_SAMPLE_RATE)
+    total = int(5 * SEGMENT_MAX_SECONDS * TARGET_SAMPLE_RATE)
     samples = np.full(total, 5000, dtype=np.int16)
-    silence_start, silence_end = 100 * TARGET_SAMPLE_RATE, 101 * TARGET_SAMPLE_RATE
+    silence_start = int(0.7 * SEGMENT_MAX_SECONDS * TARGET_SAMPLE_RATE)
+    silence_end = silence_start + TARGET_SAMPLE_RATE // 10
     samples[silence_start:silence_end] = 0
 
     chunks = Stt._split_long(samples)
     assert silence_start <= len(chunks[0]) <= silence_end + 1
+    assert len(chunks[0]) < limit
