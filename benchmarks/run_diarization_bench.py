@@ -29,7 +29,6 @@ from diarization import (  # noqa: E402
     SAMPLE_RATE,
     _CLUSTER_THRESHOLD,
     _MAX_FRAGMENT_SECONDS,
-    _MAX_TRUSTED_SPEAKERS,
     Diarizer,
 )
 
@@ -133,10 +132,7 @@ def run_grid(noise_snr: float | None = None) -> None:
     print(f"минимум DER на сетке: порог {best[0]:.2f}, DER {best[1] * 100:.1f}%")
     best_at_current = next(row for row in results if abs(row[0] - _CLUSTER_THRESHOLD) < 1e-9)
     print(f"при текущем пороге {_CLUSTER_THRESHOLD:.2f}: DER {best_at_current[1] * 100:.1f}%")
-    print(
-        f"порог {_MAX_FRAGMENT_SECONDS:.0f} с для фрагментов применяется только "
-        f"при числе спикеров больше {_MAX_TRUSTED_SPEAKERS}"
-    )
+    print(f"фрагменты короче {_MAX_FRAGMENT_SECONDS:.0f} с сворачиваются при любом числе спикеров")
 
 
 def run_timing() -> None:

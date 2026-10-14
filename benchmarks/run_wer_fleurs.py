@@ -56,25 +56,32 @@ def load(path: Path) -> np.ndarray:
     return np.concatenate(chunks).astype(np.int16)
 
 
-def edit_distance(ref: list[str], hyp: list[str]) -> tuple[int, int, int, int]:
-    """Levenshtein with substitution=2, insertion/deletion=1; returns counts."""
+def edit_distance(ref: list[str], hyp: list[str]) -> tuple[int, int, int, int, int]:
+    """Unit-cost Levenshtein between two word lists.
+
+    Returns (errors, substitutions, deletions, insertions, len(ref)). Each cell keeps the
+    counts of its cheapest alignment, so the three kinds always add up to the total,
+    including the edges where only one kind of edit is possible.
+    """
     previous = [(j, 0, 0, j) for j in range(len(hyp) + 1)]
     for i in range(1, len(ref) + 1):
         current = [(i, 0, i, 0)]
         for j in range(1, len(hyp) + 1):
             if ref[i - 1] == hyp[j - 1]:
                 current.append(previous[j - 1])
-            else:
-                best = min(
-                    previous[j - 1],  # substitution
-                    previous[j],  # deletion
-                    current[j - 1],  # insertion
+                continue
+            diag, up, left = previous[j - 1], previous[j], current[j - 1]
+            current.append(
+                min(
+                    (diag[0] + 1, diag[1] + 1, diag[2], diag[3]),  # substitution
+                    (up[0] + 1, up[1], up[2] + 1, up[3]),  # deletion
+                    (left[0] + 1, left[1], left[2], left[3] + 1),  # insertion
                     key=lambda c: c[0],
                 )
-                current.append((best[0] + 1, best[1] + 1, best[2], best[3]))
+            )
         previous = current
-    _, subs, dels, ins = previous[-1]
-    return subs, dels, ins, len(ref)
+    errors, subs, dels, ins = previous[-1]
+    return errors, subs, dels, ins, len(ref)
 
 
 def main() -> int:
@@ -107,14 +114,14 @@ def main() -> int:
         audio_seconds += samples.size / TARGET_SAMPLE_RATE
         reference = normalise(row[2])
         hypothesis = normalise(stt.transcribe_samples(samples))
-        sub, dele, ins, words = edit_distance(reference, hypothesis)
+        clip_errors, sub, dele, ins, words = edit_distance(reference, hypothesis)
         substitutions += sub
         deletions += dele
         insertions += ins
         total_words += words
-        errors += sub + dele + ins
-        if words and (sub + dele + ins) / words > 0.5:
-            worst.append(((sub + dele + ins) / words, " ".join(reference), " ".join(hypothesis)))
+        errors += clip_errors
+        if words and clip_errors / words > 0.5:
+            worst.append((clip_errors / words, " ".join(reference), " ".join(hypothesis)))
     elapsed = time.perf_counter() - started
 
     print(f"клипов: {len(rows)}, аудио: {audio_seconds / 60:.1f} мин")

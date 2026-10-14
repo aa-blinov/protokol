@@ -5,7 +5,7 @@
 #   ./desktop/build.sh --mac    # force macOS targets (must run on a Mac)
 #   ./desktop/build.sh --linux  # force Linux targets
 #
-# Models ARE bundled into the app (~0.7 GB), so it is self-contained and
+# Models ARE bundled into the app (~0.6 GB), so it is self-contained and
 # relocatable. They must therefore be present at build time — see the check in
 # preflight and download_models.sh.
 set -euo pipefail
@@ -96,10 +96,12 @@ echo "arch:   $(uname -m)"
 # otherwise electron-builder happily ships an app that cannot transcribe.
 MODELS_SRC="$ROOT/models"
 for model_file in \
-  "gigaam/v3_e2e_ctc.int8.onnx" \
-  "gigaam/v3_e2e_ctc_vocab.txt" \
+  "gigaam/v3_e2e_rnnt_encoder.int8.onnx" \
+  "gigaam/v3_e2e_rnnt_decoder.int8.onnx" \
+  "gigaam/v3_e2e_rnnt_joint.int8.onnx" \
+  "gigaam/v3_e2e_rnnt_vocab.txt" \
   "gigaam/config.json" \
-  "rubert-pii/model.optimized.fp32.onnx" \
+  "rubert-pii/model.optimized.fp16.onnx" \
   "rubert-pii/config.json" \
   "rubert-pii/tokenizer.json"
 do
@@ -146,7 +148,10 @@ if [ "$TARGET" = mac ]; then
   # build -- notarization needs a Developer ID and Apple network access, see
   # DESKTOP.md. An explicit CSC_LINK still wins if someone does want to sign.
   export CSC_IDENTITY_AUTO_DISCOVERY=false
-  npx electron-builder --mac dmg zip --arm64
+  # The unpacked app is built first. The DMG and ZIP are cut from it only after it is
+  # signed below: packing all three at once put an unsigned bundle inside the images,
+  # and the checks that followed looked only at the unpacked copy.
+  npx electron-builder --mac dir --arm64
 
   say "подпись приложения (ad-hoc)"
   # Skipping signing entirely is not enough: Apple Silicon refuses to execute an
@@ -163,6 +168,20 @@ if [ "$TARGET" = mac ]; then
   codesign --verify --deep --strict "$APP_DIR" \
     || fail "подпись приложения не проходит проверку"
   echo "подпись ad-hoc на месте и проходит проверку"
+
+  # electron-builder does not repack a prepackaged app, so the signature survives into the images.
+  npx electron-builder --mac dmg zip --arm64 --prepackaged "$APP_DIR"
+
+  # Check the image itself: the signature above was made on the unpacked copy only.
+  DMG="$(ls -t "$ROOT"/desktop/release/*.dmg | head -n 1)"
+  MNT="$(mktemp -d)"
+  hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG" >/dev/null || fail "не смонтировался $DMG"
+  SIGNED=0
+  codesign --verify --deep --strict "$MNT/$(basename "$APP_DIR")" >/dev/null 2>&1 && SIGNED=1
+  hdiutil detach "$MNT" >/dev/null || true
+  rmdir "$MNT" 2>/dev/null || true
+  [ "$SIGNED" -eq 1 ] || fail "подпись приложения внутри $(basename "$DMG") не проходит проверку"
+  echo "подпись приложения внутри DMG проходит проверку"
 else
   npx electron-builder --linux AppImage deb
 fi

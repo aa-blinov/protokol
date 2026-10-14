@@ -18,17 +18,21 @@ fetch() {
 GIGAAM="https://huggingface.co/istupakov/gigaam-v3-onnx/resolve/main"
 PII="https://huggingface.co/lockR/rubert-base-pii-ner-onnx/resolve/main"
 
-# GigaAM v3 E2E CTC. The e2e variant is required: it normalises dictated digits
+# GigaAM v3 E2E RNN-T. The e2e variant is required: it normalises dictated digits
 # so the PII model can recognise phone/passport/INN numbers at all. The plain
-# v3_ctc model leaves them as words and they leak unmasked. The int8 export is
-# used: same accuracy on our tests, ~0.5 GB lighter to load.
-fetch "$GIGAAM/v3_e2e_ctc.int8.onnx"    models/gigaam/v3_e2e_ctc.int8.onnx
-fetch "$GIGAAM/v3_e2e_ctc_vocab.txt"    models/gigaam/v3_e2e_ctc_vocab.txt
+# v3_rnnt model leaves them as words and they leak unmasked. The int8 export is
+# used. Against the e2e CTC head at the same chunk length, RNN-T has slightly fewer
+# word errors (FLEURS 3.84% vs 4.09%, a labelled dialogue 4.00% vs 4.35%) at the
+# same speed, and both write the same share of numbers as digits.
+fetch "$GIGAAM/v3_e2e_rnnt_encoder.int8.onnx"  models/gigaam/v3_e2e_rnnt_encoder.int8.onnx
+fetch "$GIGAAM/v3_e2e_rnnt_decoder.int8.onnx"  models/gigaam/v3_e2e_rnnt_decoder.int8.onnx
+fetch "$GIGAAM/v3_e2e_rnnt_joint.int8.onnx"    models/gigaam/v3_e2e_rnnt_joint.int8.onnx
+fetch "$GIGAAM/v3_e2e_rnnt_vocab.txt"          models/gigaam/v3_e2e_rnnt_vocab.txt
 fetch "$GIGAAM/config.json"             models/gigaam/config.json
 
-# ruBERT PII NER. Runs on CPU with the FP32 graph; the shipped upstream wrapper
-# is CUDA-only, so the API brings its own CPU runtime.
-fetch "$PII/model.optimized.fp32.onnx"  models/rubert-pii/model.optimized.fp32.onnx
+# ruBERT PII NER. Runs on CPU with the FP16 graph (same benchmark F1 as FP32, half
+# the size); the shipped upstream wrapper is CUDA-only, so the API brings its own CPU runtime.
+fetch "$PII/model.optimized.fp16.onnx"  models/rubert-pii/model.optimized.fp16.onnx
 fetch "$PII/config.json"                models/rubert-pii/config.json
 fetch "$PII/tokenizer.json"             models/rubert-pii/tokenizer.json
 fetch "$PII/tokenizer_config.json"      models/rubert-pii/tokenizer_config.json
