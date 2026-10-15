@@ -1,0 +1,8 @@
+{
+  "base_url": "https://llm.example.com/v1",
+  "lock_settings": true,
+  "retention_days": 30,
+  "allow_export": false,
+  "zdr": true,
+  "data_collection": "deny"
+}

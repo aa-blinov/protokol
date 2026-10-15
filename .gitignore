@@ -42,3 +42,8 @@ sessions.json
 
 # Screenshots from the browser checks (web/e2e/run.mjs), rewritten on every run.
 /web/e2e/out/
+benchmarks/pilot/data/
+
+# Licence and trial markers kept beside the settings file when the app runs from the repo.
+trial.json
+license.json
