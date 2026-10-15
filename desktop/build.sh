@@ -144,36 +144,62 @@ if [ "$TARGET" = mac ]; then
   # Do not let electron-builder pick up whatever certificate happens to sit in the
   # keychain: osx-sign then walks the whole 1.4 GB bundle (the ONNX models are
   # hundreds of MB each) and dies with "RangeError: Invalid array length" inside
-  # isbinaryfile, leaving a half-signed .app behind. Signing is not part of this
-  # build -- notarization needs a Developer ID and Apple network access, see
-  # DESKTOP.md. An explicit CSC_LINK still wins if someone does want to sign.
+  # isbinaryfile, leaving a half-signed .app behind. Auto-discovery stays off; the
+  # identity is named explicitly below, so nothing is picked up by accident.
   export CSC_IDENTITY_AUTO_DISCOVERY=false
+  # A distributable build names a Developer ID Application certificate and a notarytool
+  # keychain profile (see DESKTOP.md). Without them the build is ad-hoc signed and runs
+  # on this Mac only. The notarisation password never passes through this script.
+  IDENTITY="${PROTOKOL_SIGN_IDENTITY:-}"
+  NOTARY_PROFILE="${PROTOKOL_NOTARY_PROFILE:-}"
+  if [ -n "$IDENTITY" ]; then
+    export CSC_NAME="$IDENTITY"
+    say "подпись: $IDENTITY, hardened runtime"
+  fi
   # The unpacked app is built first. The DMG and ZIP are cut from it only after it is
   # signed below: packing all three at once put an unsigned bundle inside the images,
   # and the checks that followed looked only at the unpacked copy.
   npx electron-builder --mac dir --arm64
 
-  say "подпись приложения (ad-hoc)"
-  # Skipping signing entirely is not enough: Apple Silicon refuses to execute an
-  # unsigned bundle. Signing ad-hoc is what a local build needs, and it also
-  # replaces any stale signature left by an earlier interrupted run.
   APP_DIR="$ROOT/desktop/release/mac-arm64/sttshka.app"
   [ -d "$APP_DIR" ] || fail "electron-builder не собрал $APP_DIR"
-  codesign --remove-signature "$APP_DIR" 2>/dev/null || true
-  find "$APP_DIR" -name "._*" -delete 2>/dev/null || true
-  codesign --force --deep --sign - "$APP_DIR" \
-    || fail "не удалось подписать приложение ad-hoc"
-  # Never trust the build's exit status alone here: a bundle can carry a stale or
-  # partial signature and still "succeed". Verify it independently.
-  codesign --verify --deep --strict "$APP_DIR" \
-    || fail "подпись приложения не проходит проверку"
-  echo "подпись ad-hoc на месте и проходит проверку"
+  if [ -n "$IDENTITY" ]; then
+    # electron-builder signed the unpacked app with the identity above. Check it independently.
+    codesign --verify --deep --strict "$APP_DIR" || fail "подпись $IDENTITY не проходит проверку"
+    echo "подпись $IDENTITY на месте"
+  else
+    say "подпись приложения (ad-hoc)"
+    # Skipping signing entirely is not enough: Apple Silicon refuses to execute an
+    # unsigned bundle. Signing ad-hoc is what a local build needs, and it also
+    # replaces any stale signature left by an earlier interrupted run.
+    codesign --remove-signature "$APP_DIR" 2>/dev/null || true
+    find "$APP_DIR" -name "._*" -delete 2>/dev/null || true
+    codesign --force --deep --sign - "$APP_DIR" \
+      || fail "не удалось подписать приложение ad-hoc"
+    # Never trust the build's exit status alone here: a bundle can carry a stale or
+    # partial signature and still "succeed". Verify it independently.
+    codesign --verify --deep --strict "$APP_DIR" \
+      || fail "подпись приложения не проходит проверку"
+    echo "подпись ad-hoc на месте и проходит проверку"
+  fi
 
   # electron-builder does not repack a prepackaged app, so the signature survives into the images.
   npx electron-builder --mac dmg zip --arm64 --prepackaged "$APP_DIR"
 
-  # Check the image itself: the signature above was made on the unpacked copy only.
   DMG="$(ls -t "$ROOT"/desktop/release/*.dmg | head -n 1)"
+  if [ -n "$IDENTITY" ] && [ -n "$NOTARY_PROFILE" ]; then
+    say "нотаризация у Apple (несколько минут)"
+    xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait \
+      || fail "нотаризация не прошла: xcrun notarytool log <id> --keychain-profile $NOTARY_PROFILE"
+    xcrun stapler staple "$DMG" || fail "stapler не приклеил билет нотаризации"
+    spctl --assess --type open --context context:primary-signature -vv "$DMG" \
+      || fail "Gatekeeper не принимает DMG"
+    echo "DMG нотаризован и принимается Gatekeeper"
+  elif [ -n "$IDENTITY" ]; then
+    echo "нотаризация пропущена: задайте PROTOKOL_NOTARY_PROFILE (см. DESKTOP.md)"
+  fi
+
+  # Check the image itself: the signature above was made on the unpacked copy only.
   MNT="$(mktemp -d)"
   hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG" >/dev/null || fail "не смонтировался $DMG"
   SIGNED=0
