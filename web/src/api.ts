@@ -247,6 +247,20 @@ export interface SettingsState {
   presets: { key: string; label: string }[];
   /** Masked key per API address, so switching service and back keeps each one. */
   saved_keys: Record<string, string>;
+  /** Days of history to keep; 0 keeps everything. */
+  retention_days: number;
+  /** What the organisation fixed on this Mac, if it deployed a policy. */
+  policy: PolicyState;
+}
+
+export interface PolicyState {
+  managed: boolean;
+  lock_settings: boolean;
+  base_url_locked: boolean;
+  allow_export: boolean;
+  retention_days: number | null;
+  /** Problems in the policy file. The valid part of it still applies. */
+  errors: string[];
 }
 
 export interface SettingsResult {
@@ -287,18 +301,20 @@ export async function verifyKey(key: string, baseUrl: string, remember: boolean)
   return response.json();
 }
 
-/** Saves the address, key and model. Empty values keep what is stored. */
+/** Saves the address, key, model and, when given, the days of history to keep.
+ *  Empty values keep what is stored. */
 export async function saveSettings(
   key: string,
   model: string,
   baseUrl: string,
   preset: string,
   extra: string,
+  retentionDays: number | null = null,
 ): Promise<SettingsResult> {
   const response = await request("/api/settings", {
     method: "POST",
     headers: jsonHeaders,
-    body: JSON.stringify({ key, model, base_url: baseUrl, preset, extra }),
+    body: JSON.stringify({ key, model, base_url: baseUrl, preset, extra, retention_days: retentionDays }),
   });
   if (!response.ok) await toError(response);
   return response.json();
@@ -306,6 +322,48 @@ export async function saveSettings(
 
 export async function getModels(): Promise<ModelInfo[]> {
   const response = await request("/api/models");
+  if (!response.ok) await toError(response);
+  return response.json();
+}
+
+export interface LicenceState {
+  state: "trial" | "licensed" | "expired";
+  days_left: number | null;
+  customer: string | null;
+  edition: string | null;
+  seats: number | null;
+  expires: string | null;
+  /** Why the licence is not in force, when it is not. */
+  problem: string;
+}
+
+export interface HealthState {
+  /** FileVault on or off; null where the question cannot be asked. */
+  filevault: boolean | null;
+  license: LicenceState;
+  policy: { managed: boolean; errors: string[] };
+  retention_days: number;
+}
+
+export async function getHealth(): Promise<HealthState> {
+  const response = await request("/api/health");
+  if (!response.ok) await toError(response);
+  return response.json();
+}
+
+export async function getLicence(): Promise<LicenceState> {
+  const response = await request("/api/license");
+  if (!response.ok) await toError(response);
+  return response.json();
+}
+
+/** Installs a licence file. The sidecar refuses it unless its signature checks out. */
+export async function activateLicence(text: string): Promise<LicenceState> {
+  const response = await request("/api/license", {
+    method: "POST",
+    headers: jsonHeaders,
+    body: JSON.stringify({ text }),
+  });
   if (!response.ok) await toError(response);
   return response.json();
 }
