@@ -70,6 +70,17 @@ class ProcessProgress(BaseModel):
     result: ProcessResult | None = None
 
 
+class PolicyState(BaseModel):
+    """What the organisation fixed on this Mac. A field that is off means nothing is fixed."""
+
+    managed: bool = Field(default=False, description="A policy file is present")
+    lock_settings: bool = Field(default=False, description="No setting can be changed in the app")
+    base_url_locked: bool = Field(default=False, description="The service address is fixed")
+    allow_export: bool = Field(default=True, description="The .txt export, copy and print are offered")
+    retention_days: int | None = Field(default=None, description="History is kept this many days")
+    errors: list[str] = Field(default_factory=list, description="Problems in the policy file, reported and skipped")
+
+
 class SettingsState(BaseModel):
     """What the settings dialog needs to render itself.
 
@@ -90,6 +101,8 @@ class SettingsState(BaseModel):
         default_factory=dict,
         description="Masked keys per API address, so switching service and back keeps each one",
     )
+    retention_days: int = Field(default=0, description="Days of history to keep; 0 keeps everything")
+    policy: PolicyState = Field(default_factory=PolicyState, description="What the organisation fixed")
 
 
 class SettingsUpdate(BaseModel):
@@ -101,6 +114,9 @@ class SettingsUpdate(BaseModel):
     verify: bool = Field(default=True, description="Check the key against that address before saving")
     preset: str = Field(default="", description="Preset key; empty means keep the current one")
     extra: str | None = Field(default=None, description="Extra requirement; null means keep, empty string clears")
+    retention_days: int | None = Field(
+        default=None, ge=0, le=3650, description="Days of history to keep; null keeps the stored value"
+    )
 
 
 class SettingsResult(BaseModel):
@@ -202,3 +218,9 @@ class EstimateResult(BaseModel):
     output: float | None = Field(default=None, description="USD for the reply")
     total: float | None = None
     currency: str = "USD"
+
+
+class LicenceActivate(BaseModel):
+    """A licence file as the customer received it."""
+
+    text: str = Field(description="The licence document: JSON with payload and signature")

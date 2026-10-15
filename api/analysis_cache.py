@@ -20,6 +20,7 @@ from typing import Any
 
 import config
 import settings
+from storage import write_private
 
 MAX_ENTRIES = 8
 
@@ -62,11 +63,7 @@ def get(key: str) -> dict[str, Any] | None:
 
 
 def put(key: str, payload: dict[str, Any]) -> None:
-    path = _path(key)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".tmp")
-    temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    temporary.replace(path)
+    write_private(_path(key), json.dumps(payload, ensure_ascii=False))
     _trim()
 
 
@@ -82,3 +79,20 @@ def _trim() -> None:
             stale.unlink()
         except OSError:
             pass
+
+
+def purge_except(keep: set[str]) -> int:
+    """Delete every cache entry that no session refers to any more; returns the count.
+
+    Removing a recording from the history must take its transcript off the disk
+    as well, not wait for eight newer recordings to push it out.
+    """
+    removed = 0
+    for entry in _path("").parent.glob("*.json"):
+        if entry.stem not in keep:
+            try:
+                entry.unlink()
+                removed += 1
+            except OSError:
+                pass
+    return removed

@@ -29,6 +29,14 @@ def _load_env_file() -> None:
 
 _load_env_file()
 
+# The organisation's policy file, when there is one, wins over the user's own settings
+# for the things it fixes. It is read here, before any of these values are taken.
+import policy as _policy_file  # noqa: E402
+
+POLICY = _policy_file.load()
+if POLICY.base_url:
+    os.environ["OPENROUTER_BASE_URL"] = POLICY.base_url
+
 
 # models/ sits next to api/ in the repo and is mounted at /app/models in Docker.
 MODELS_DIR = Path(os.getenv("MODELS_DIR", Path(__file__).resolve().parents[1] / "models"))
@@ -50,10 +58,10 @@ DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL", "deepseek/deepseek-v4.1-flash")
 # What the provider may do with the prompt. "deny" keeps requests away from
 # providers that store prompts non-transiently or train on them. OpenRouter's own
 # default is "allow", so the app asks for "deny" unless told otherwise.
-LLM_DATA_COLLECTION = os.getenv("LLM_DATA_COLLECTION", "deny")
+LLM_DATA_COLLECTION = POLICY.data_collection or os.getenv("LLM_DATA_COLLECTION", "deny")
 # Zero data retention: only endpoints with a ZDR policy. Off by default, because a
 # model may have no such endpoint at all, and then the request fails loudly.
-LLM_ZDR = os.getenv("LLM_ZDR", "0") == "1"
+LLM_ZDR = POLICY.zdr if POLICY.zdr is not None else os.getenv("LLM_ZDR", "0") == "1"
 # How hard the summary model reasons before it answers: "", "low", "medium", "high".
 # Empty leaves the provider's default in place.
 LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "")

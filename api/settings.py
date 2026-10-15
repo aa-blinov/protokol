@@ -25,6 +25,7 @@ from pathlib import Path
 import httpx
 
 import config
+from storage import write_private
 
 KEY_ENV = "OPENROUTER_API_KEY"
 MODEL_ENV = "LLM_MODEL"
@@ -160,7 +161,7 @@ def write_pair(
     for name, value in resolved.items():
         if value:
             kept.append(f"{name}={value}")
-    path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    write_private(path, "\n".join(kept) + "\n")
     return path
 
 
@@ -236,6 +237,36 @@ def current_preset() -> str:
 
 def current_extra() -> str:
     return (os.getenv(EXTRA_ENV) or "").strip()
+
+
+RETENTION_ENV = "RETENTION_DAYS"
+
+
+def retention_days() -> int:
+    """Days of history to keep. The organisation's number wins; then the user's own; 0 keeps all."""
+    if config.POLICY.retention_days:
+        return config.POLICY.retention_days
+    try:
+        return max(0, int(os.getenv(RETENTION_ENV, "0") or 0))
+    except ValueError:
+        return 0
+
+
+def save_retention(days: int) -> None:
+    """Keep the user's own retention in the settings file. Zero keeps everything."""
+    path = settings_path()
+    kept: list[str] = []
+    if path.is_file():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and stripped.partition("=")[0].strip() != RETENTION_ENV:
+                kept.append(stripped)
+    if days > 0:
+        kept.append(f"{RETENTION_ENV}={days}")
+        os.environ[RETENTION_ENV] = str(days)
+    else:
+        os.environ.pop(RETENTION_ENV, None)
+    write_private(path, "\n".join(kept) + "\n")
 
 
 def verify(key: str, base_url: str = "") -> dict:
