@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
 
@@ -19,8 +20,10 @@ from fastapi.staticfiles import StaticFiles
 
 import config
 import analysis_cache
+import licensing
 import llm
 import schemas
+import storage
 from dialogue import assign_words_to_turns, build_dialogue
 from diarization import Diarizer
 from llm import DEFAULT_MODEL, PRESET_LABELS, LlmError, OpenRouterClient
@@ -173,7 +176,53 @@ def _settings_state() -> schemas.SettingsState:
             address: settings.KeyHint.of(saved).masked
             for address, saved in settings.provider_keys().items()
         },
+        retention_days=settings.retention_days(),
+        policy=_policy_state(),
     )
+
+
+def _policy_state() -> schemas.PolicyState:
+    rules = config.POLICY
+    return schemas.PolicyState(
+        managed=rules.present,
+        lock_settings=rules.lock_settings,
+        base_url_locked=bool(rules.base_url),
+        allow_export=rules.allow_export,
+        retention_days=rules.retention_days,
+        errors=list(rules.errors),
+    )
+
+
+def _licensed() -> None:
+    """Transcription and summaries stop when the trial is over and no licence is installed."""
+    try:
+        licensing.require_active()
+    except licensing.LicenceError as error:
+        raise HTTPException(402, str(error)) from error
+
+
+def _within_retention(sessions: list[dict]) -> list[dict]:
+    """Drop recordings older than the retention period. Zero keeps everything.
+
+    An entry without a readable date is kept: deleting by guesswork would be worse
+    than keeping one entry too many.
+    """
+    days = settings.retention_days()
+    if days <= 0:
+        return sessions
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    kept: list[dict] = []
+    for session in sessions:
+        try:
+            created = datetime.fromisoformat(str(session.get("createdAt", "")))
+        except ValueError:
+            kept.append(session)
+            continue
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        if created >= cutoff:
+            kept.append(session)
+    return kept
 
 
 def _sessions_path() -> Path:
@@ -200,7 +249,7 @@ def read_sessions() -> list[dict]:
         return []
     if not isinstance(data, list):
         return []
-    return [_migrate_session(item) for item in data]
+    return _within_retention([_migrate_session(item) for item in data])
 
 
 def _migrate_session(session: dict) -> dict:
@@ -222,12 +271,16 @@ def _migrate_session(session: dict) -> dict:
 @app.put("/api/sessions")
 def write_sessions(payload: list[dict]) -> dict[str, int]:
     """Replace the stored history. Written whole, so a crash cannot truncate it."""
-    path = _sessions_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(payload[:50], ensure_ascii=False), encoding="utf-8")
-    temporary.replace(path)
-    return {"saved": min(len(payload), 50)}
+    kept = _within_retention(payload[:50])
+    storage.write_private(_sessions_path(), json.dumps(kept, ensure_ascii=False))
+    # A recording that left the history takes its transcript off the disk with it.
+    referenced = {
+        session["analysis"]["cache_key"]
+        for session in kept
+        if isinstance(session.get("analysis"), dict) and session["analysis"].get("cache_key")
+    }
+    analysis_cache.purge_except(referenced)
+    return {"saved": len(kept)}
 
 
 @app.get("/api/settings", response_model=schemas.SettingsState)
@@ -236,9 +289,22 @@ def read_settings() -> schemas.SettingsState:
     return _settings_state()
 
 
+def _refuse_if_locked(request: schemas.SettingsUpdate) -> None:
+    """The organisation's policy decides what the app may change."""
+    rules = config.POLICY
+    if rules.lock_settings:
+        raise HTTPException(403, "Настройки задаёт организация. Изменить их в приложении нельзя.")
+    address = request.base_url.strip().rstrip("/")
+    if rules.base_url and address and address != rules.base_url:
+        raise HTTPException(403, "Адрес сервиса задан организацией.")
+    if rules.retention_days and request.retention_days is not None:
+        raise HTTPException(403, "Срок хранения задан организацией.")
+
+
 @app.post("/api/settings", response_model=schemas.SettingsResult)
 def update_settings(request: schemas.SettingsUpdate) -> schemas.SettingsResult:
     """Save the address, key and model. A bad key is reported, not stored."""
+    _refuse_if_locked(request)
     key = request.key.strip()
     model = request.model.strip()
     base_url = request.base_url.strip()
@@ -248,6 +314,8 @@ def update_settings(request: schemas.SettingsUpdate) -> schemas.SettingsResult:
         if not check["ok"]:
             return schemas.SettingsResult(ok=False, detail=check["detail"], settings=_settings_state())
     settings.save(key, model, base_url, request.preset, request.extra)
+    if request.retention_days is not None:
+        settings.save_retention(request.retention_days)
     detail = "Сохранено" if not key else "Ключ проверен и сохранён"
     return schemas.SettingsResult(ok=True, detail=detail, settings=_settings_state())
 
@@ -255,6 +323,8 @@ def update_settings(request: schemas.SettingsUpdate) -> schemas.SettingsResult:
 @app.post("/api/settings/verify", response_model=schemas.KeyCheckResult)
 def verify_key(request: schemas.KeyCheck) -> schemas.KeyCheckResult:
     """Check a key against the configured address, without saving unless asked."""
+    if request.remember and config.POLICY.lock_settings:
+        raise HTTPException(403, "Настройки задаёт организация. Изменить их в приложении нельзя.")
     target = request.base_url.strip() or settings.current_base_url()
     check = settings.verify(request.key, target)
     if check["ok"] and request.remember:
@@ -290,11 +360,31 @@ def health() -> dict:
         # first /api/mask — /api/transcribe loads STT and never touches this one.
         "ner_provider": _ner.active_provider if _ner is not None else None,
         "web": config.WEB_DIST_DIR.is_dir(),
+        "license": licensing.status(),
+        "policy": {"managed": config.POLICY.present, "errors": list(config.POLICY.errors)},
+        "filevault": storage.filevault_enabled(),
+        "retention_days": settings.retention_days(),
     }
+
+
+@app.get("/api/license")
+def read_license() -> dict:
+    """Trial, licensed or expired, with the customer and the days left."""
+    return licensing.status()
+
+
+@app.post("/api/license")
+def install_license(request: schemas.LicenceActivate) -> dict:
+    """Install a licence file. It is refused unless its signature checks out."""
+    try:
+        return licensing.activate(request.text)
+    except licensing.LicenceError as error:
+        raise HTTPException(400, str(error)) from error
 
 
 @app.post("/api/transcribe", response_model=schemas.TranscribeResponse)
 async def transcribe(file: UploadFile = File(...)) -> schemas.TranscribeResponse:
+    _licensed()
     audio = await file.read()
     if not audio:
         raise HTTPException(400, "Empty file")
@@ -428,6 +518,7 @@ async def analyse(file: UploadFile = File(...)) -> StreamingResponse:
     Split from the summary so this half can be reused: the focus can change any
     number of times without listening to the recording again.
     """
+    _licensed()
     audio = await file.read()
     if not audio:
         raise HTTPException(400, "Empty file")
@@ -451,6 +542,7 @@ async def analyse(file: UploadFile = File(...)) -> StreamingResponse:
 @app.post("/api/summarize", response_model=schemas.SummarizeResult)
 def summarize(request: schemas.SummarizeRequest) -> schemas.SummarizeResult:
     """The summary alone, over an already-analysed recording."""
+    _licensed()
     cached = analysis_cache.get(request.cache_key)
     # The cache is bounded at eight entries, so a recording analysed last week is
     # simply gone from it -- and saying "загрузите заново" about a file that is
@@ -558,6 +650,7 @@ async def process(
 
     Every line is a ``ProcessProgress`` object; the last one carries the result.
     """
+    _licensed()
     audio = await file.read()
     if not audio:
         raise HTTPException(400, "Empty file")
