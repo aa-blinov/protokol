@@ -12,10 +12,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  activateLicence,
+  getHealth,
+  getLicence,
   getModels,
   getSettings,
   saveSettings,
   verifyKey,
+  type HealthState,
+  type LicenceState,
   type ModelInfo,
   type SettingsState,
 } from "./api";
@@ -238,6 +243,22 @@ function ModelPicker({
   );
 }
 
+/** One sentence about the licence, in the words the customer needs. */
+function licenceLine(licence: LicenceState): string {
+  if (licence.state === "licensed") {
+    const who = [
+      licence.customer,
+      licence.edition ? `издание ${licence.edition}` : null,
+      licence.seats ? `мест: ${licence.seats}` : null,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    return licence.expires ? `Лицензия: ${who}, до ${licence.expires}.` : `Лицензия: ${who}, бессрочно.`;
+  }
+  if (licence.state === "trial") return `Пробный период: осталось ${licence.days_left} дн.`;
+  return `${licence.problem || "Лицензия не действует"}. Расшифровка и выжимка остановлены; история доступна.`;
+}
+
 export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => void }) {
   const [state, setState] = useState<SettingsState | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
@@ -258,6 +279,24 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
   const [busy, setBusy] = useState<"check" | "save" | null>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "bad" | "idle"; text: string }>({ tone: "idle", text: "" });
   const selected = useMemo(() => models.find((m) => m.id === model), [models, model]);
+  const [retention, setRetention] = useState("0");
+  const [licence, setLicence] = useState<LicenceState | null>(null);
+  const [health, setHealth] = useState<HealthState | null>(null);
+  // What the organisation fixed. A locked field is disabled, not hidden, so the
+  // person can see what is set and why it cannot be changed here.
+  const locked = state?.policy.lock_settings ?? false;
+  const baseLocked = state?.policy.base_url_locked ?? false;
+  const retentionLocked = (state?.policy.retention_days ?? null) !== null;
+
+  const installLicence = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      setLicence(await activateLicence(await file.text()));
+      setMessage({ tone: "ok", text: "Лицензия установлена" });
+    } catch (error) {
+      setMessage({ tone: "bad", text: (error as Error).message });
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -270,6 +309,9 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
         setBaseUrl(loaded.base_url);
         setPreset(loaded.preset);
         setExtra(loaded.extra);
+        setRetention(String(loaded.retention_days ?? 0));
+        void getLicence().then((value) => { if (alive) setLicence(value); }).catch(() => undefined);
+        void getHealth().then((value) => { if (alive) setHealth(value); }).catch(() => undefined);
         // A key is already on file, so its catalogue can be fetched straight away.
         if (loaded.has_key) {
           setKeyOk(true);
@@ -327,7 +369,8 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
     setBusy("save");
     setMessage({ tone: "idle", text: "" });
     try {
-      const result = await saveSettings(key, model, baseUrl, preset, extra);
+      const days = Math.max(0, Math.floor(Number(retention) || 0));
+      const result = await saveSettings(key, model, baseUrl, preset, extra, retentionLocked ? null : days);
       setState(result.settings);
       setKey("");
       onSaved(result.settings);
@@ -341,8 +384,20 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
 
   return (
     <div className="space-y-6">
+      {state?.policy.managed ? (
+        <div className="rounded border border-stone-300 bg-stone-100 px-3 py-2 text-sm text-stone-700">
+          Настройки задаёт организация{locked ? ": изменить их в приложении нельзя" : ""}.
+          {state.policy.errors.length ? (
+            <span className="mt-1 block text-xs text-red-700">
+              Не применено из файла политики: {state.policy.errors.join("; ")}.
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+      <fieldset disabled={locked} className="space-y-6">
       <Section label="Сервис для текста">
         <select
+          disabled={baseLocked}
           value={service?.id ?? "custom"}
           onChange={(event) => {
             const picked = SERVICES.find((s) => s.id === event.target.value);
@@ -372,6 +427,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
         </select>
 
         <input
+          disabled={baseLocked}
           value={baseUrl}
           onChange={(event) => {
             setBaseUrl(event.target.value);
@@ -476,6 +532,49 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
         </p>
       </Section>
 
+      </fieldset>
+
+      <fieldset disabled={locked || retentionLocked}>
+        <Section label="Срок хранения истории">
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="number"
+              min={0}
+              max={3650}
+              value={retention}
+              onChange={(event) => setRetention(event.target.value)}
+              aria-label="Срок хранения, дней"
+              className={`${FIELD} w-28 text-sm`}
+            />
+            <span className="text-sm text-stone-600">дней; 0 — не удалять</span>
+          </div>
+          <p className="mt-2 text-xs text-stone-500">
+            {retentionLocked
+              ? `Срок задан организацией: ${state?.policy.retention_days} дн.`
+              : "Записи старше срока удаляются вместе с расшифровкой и кэшем."}
+          </p>
+          {health && health.filevault === false ? (
+            <p className="mt-2 text-xs text-red-700">
+              FileVault выключен: данные на диске не зашифрованы системой. Включите его в Системных
+              настройках, в разделе «Конфиденциальность и безопасность».
+            </p>
+          ) : null}
+        </Section>
+      </fieldset>
+
+      <Section label="Лицензия">
+        <p className="text-sm text-stone-700">
+          {licence ? licenceLine(licence) : "Состояние лицензии загружается…"}
+        </p>
+        <input
+          type="file"
+          accept=".json,.license,application/json"
+          aria-label="Файл лицензии"
+          onChange={(event) => void installLicence(event.target.files?.[0])}
+          className="mt-2 text-sm"
+        />
+      </Section>
+
       {message.text ? (
         <p className={`text-sm ${message.tone === "ok" ? "text-stone-700" : message.tone === "bad" ? "text-red-700" : "text-stone-600"}`}>
           {message.text}
@@ -483,10 +582,10 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button onClick={() => void save()} disabled={busy !== null || (!key && !model && !baseUrl)}>
+        <Button onClick={() => void save()} disabled={locked || busy !== null || (!key && !model && !baseUrl)}>
           {busy === "save" ? "Сохраняем…" : "Сохранить"}
         </Button>
-        <Button variant="ghost" onClick={() => void check(false)} disabled={!key || busy !== null}>
+        <Button variant="ghost" onClick={() => void check(false)} disabled={locked || !key || busy !== null}>
           {busy === "check" ? "Проверяем…" : "Проверить ключ"}
         </Button>
       </div>

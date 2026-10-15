@@ -284,6 +284,8 @@ function Document({
             centre inside the row and their borders sit a pixel off the search
             box, which reads as a mis-drawn frame even though both borders are
             the same colour. */}
+        {settings.policy?.allow_export === false ? null : (
+        <>
         <Button
           variant="ghost"
           className="min-h-[38px]"
@@ -302,6 +304,8 @@ function Document({
         <Button variant="ghost" className="min-h-[38px]" onClick={() => window.print()}>
           Печать / PDF
         </Button>
+        </>
+        )}
         <Button
           variant="ghost"
           className="min-h-[38px]"
@@ -327,7 +331,7 @@ function Document({
               ? `составлена в другом режиме, вариантов: ${made.length}`
               : "не составлялась"
         }
-        meta={summary ? <CopyButton text={summary.reply_unmasked} /> : null}
+        meta={summary && settings.policy?.allow_export !== false ? <CopyButton text={summary.reply_unmasked} /> : null}
       >
         {/* One chip per mode, so every summary stays reachable: a made mode shows its
             own result, an unmade one opens the compose form for that mode. The form
@@ -459,7 +463,7 @@ function Document({
 
       <Section
         label="Расшифровка"
-        meta={<CopyButton text={transcriptText(analysis)} />}
+        meta={settings.policy?.allow_export === false ? null : <CopyButton text={transcriptText(analysis)} />}
         collapsed={Boolean(folded.transcript) && query.trim() === ""}
         onToggle={() => toggle("transcript")}
         collapsedNote={`${formatCount(transcriptText(analysis).length)} знаков, ${speakers > 1 ? `${speakers} спикеров` : "один голос"}`}
