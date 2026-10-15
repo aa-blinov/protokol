@@ -163,6 +163,15 @@ if [ "$TARGET" = mac ]; then
 
   APP_DIR="$ROOT/desktop/release/mac-arm64/sttshka.app"
   [ -d "$APP_DIR" ] || fail "electron-builder не собрал $APP_DIR"
+  # Notices for the third-party parts of the app (models, dictionaries, web UI packages,
+  # Electron). They go in before the signing below, so the signature covers them.
+  RES="$APP_DIR/Contents/Resources"
+  cp "$ROOT/desktop/THIRD_PARTY_NOTICES.txt" "$ROOT/desktop/THIRD_PARTY_NOTICES-npm.txt" "$RES/"
+  ELECTRON_VERSION="$(node -p "require('$ROOT/desktop/node_modules/electron/package.json').version")"
+  ELECTRON_ZIP="$(find "$HOME/Library/Caches/electron" -name "electron-v${ELECTRON_VERSION}-darwin-arm64.zip" 2>/dev/null | head -n 1)"
+  [ -n "$ELECTRON_ZIP" ] || fail "нет zip Electron $ELECTRON_VERSION в кэше: тексты его лицензий не скопированы"
+  unzip -p "$ELECTRON_ZIP" LICENSE > "$RES/LICENSE-Electron.txt"
+  unzip -p "$ELECTRON_ZIP" LICENSES.chromium.html > "$RES/LICENSES.chromium.html"
   if [ -n "$IDENTITY" ]; then
     # electron-builder signed the unpacked app with the identity above. Check it independently.
     codesign --verify --deep --strict "$APP_DIR" || fail "подпись $IDENTITY не проходит проверку"
