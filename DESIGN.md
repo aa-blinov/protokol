@@ -217,7 +217,7 @@ A thin `h-1.5` `bg-slate-200` track filled with the accent; a message on the lef
 One large dashed zone, centred, doubled as the onboarding panel (see Onboarding). The old empty-state card is gone — there is exactly one dashed target, and it explains the product instead of only inviting a drop.
 
 ### History index
-A plain list, not cards: a bordered `Поиск` field above it, each row the file name plus a mono line reading `выжимка · N персональных данных` (or `без выжимки`, which answers "does this one have the answer or only the text" before it is opened); the active row is blue on slate-100. On hover a `✎` renames the row in place (the name becomes an input; Enter commits, Escape cancels) and a trash icon deletes it — in two steps, because a removed transcript cannot be brought back. An unmatched search reads «Ничего не нашлось».
+A plain list, not cards: a bordered `Поиск` field above it, each row the file name plus a mono line reading `выжимка · N персональных данных` (or `без выжимки`, which answers "does this one have the answer or only the text" before it is opened); the active row is blue on slate-100. On hover a `` renames the row in place (the name becomes an input; Enter commits, Escape cancels) and a trash icon deletes it — in two steps, because a removed transcript cannot be brought back. An unmatched search reads «Ничего не нашлось».
 
 ### Settings panel
 Settings live in the left rail, behind a single row that reads «Настройки» — not a strip under the header, which was specified once and never built. It opens as a view in place of the document (`К записям` goes back), so settings never float over the transcript they describe.
