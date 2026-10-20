@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Protokol: transcribe a meeting, mask the personal data</title>
+  <meta name="description" content="Transcribe a meeting recording on your own machine, mask the personal data in the transcript, and send only the tokenized text to a language model. The reply comes back with the names restored locally, and the original recording never leaves the computer.">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#1d2021" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#fbf1c7" media="(prefers-color-scheme: light)">
+  <meta property="og:title" content="Protokol">
+  <meta property="og:description" content="Transcribe a meeting recording on your own machine, mask the personal data, and send only the tokenized text to a language model.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="screenshots/app-results.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="#top" aria-label="Protokol, back to the top">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M6.25 2.5h11.5A1.75 1.75 0 0 1 19.5 4.25v15.5a1.75 1.75 0 0 1-1.75 1.75H6.25A1.75 1.75 0 0 1 4.5 19.75V4.25A1.75 1.75 0 0 1 6.25 2.5Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          <path d="M8 8h8M8 12h8M8 16h5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>Protokol</span>
+      </a>
+      <nav class="site-nav" aria-label="Sections">
+        <a href="#pipeline">Pipeline</a>
+        <a href="#masking">Masking</a>
+        <a href="#screens">The app</a>
+        <a href="#install">Install</a>
+        <a href="#policy">Administrators</a>
+      </nav>
+      <a class="header-github" href="https://github.com/aa-blinov/protokol">GitHub</a>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <section class="hero wrap" id="top" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <h1 id="hero-title">Transcribe a meeting recording on your own machine, mask the personal data, and send only the tokenized text to a language model.</h1>
+        <p class="lede">The reply comes back with the names restored locally, and the original recording never leaves the computer. Protokol is a desktop app for macOS and Linux with the models inside the bundle.</p>
+        <div class="actions">
+          <a class="button" href="#install">Install it</a>
+          <a class="button button-ghost" href="#pipeline">How it works</a>
+        </div>
+        <p class="fine">MIT licence. macOS 13 or newer on Apple Silicon, and Linux. Fourteen days without a licence file. <a href="#install">Build targets</a></p>
+      </div>
+
+      <figure class="shot reveal">
+        <img src="screenshots/app-results.png" width="2560" height="1800" alt="The result screen for a meeting recording. The summary is on top, with the decisions and the errands under it, and the transcript is below, split into turns with speaker labels and timecodes. The personal data found in the text is highlighted.">
+        <figcaption>The result. The transcript keeps the names, the model never sees them.</figcaption>
+      </figure>
+    </section>
+
+    <section class="section wrap" id="pipeline" aria-labelledby="pipeline-title">
+      <h2 id="pipeline-title">What happens to the recording</h2>
+      <p class="lede">Four steps. Three of them never touch the network, and the fourth is the only one that costs money.</p>
+      <ol class="rail">
+        <li class="reveal">
+          <h3>Decode</h3>
+          <p><span class="tag tag-ok">on this computer</span> PyAV decodes the file to 16 kHz mono in process. Its wheel carries the FFmpeg libraries, so the app needs no ffmpeg on the machine, and the audio file itself is not kept.</p>
+        </li>
+        <li class="reveal">
+          <h3>Transcribe</h3>
+          <p><span class="tag tag-ok">on this computer</span> GigaAM v3, an ONNX model in int8, runs on the CPU in chunks of at most 20 seconds, each cut at the quietest frame near the limit. A 75-minute file of 137 MB was recognised in 1 minute 25 seconds.</p>
+        </li>
+        <li class="reveal">
+          <h3>Mask</h3>
+          <p><span class="tag tag-ok">on this computer</span> A ruBERT model finds the entities that depend on meaning, and a rule layer covers the identifiers whose format can be checked mechanically: the tax id, the card number, the passport, the phone, one-time codes.</p>
+        </li>
+        <li class="reveal">
+          <h3>Summarise</h3>
+          <p><span class="tag tag-warn">one call to the provider</span> The masked text goes out, the model writes the summary, and the tokens in the reply are replaced by the original values here. The restored text is never sent anywhere.</p>
+        </li>
+      </ol>
+      <p>The pipeline is split in two on purpose. Transcription takes about 30 seconds for a 20-minute recording and costs nothing, because nothing leaves the machine. The summary is one call and it costs money. A second mode costs one call and no transcription.</p>
+      <p class="fine">Speaker turns come from pyannote segmentation and a CAM++ voice embedding, grouped by cosine clustering. Both models are optional: without them the app still transcribes, it just cannot name the turns.</p>
+    </section>
+
+    <section class="section wrap" id="masking" aria-labelledby="masking-title">
+      <h2 id="masking-title">What the model gets, and what it never gets</h2>
+      <p class="lede">The whole masked text and a cost estimate are on screen before the request. A transcript with no summary is a legitimate outcome.</p>
+
+      <div class="compare">
+        <div>
+          <h3>In the app</h3>
+          <p>&laquo;Здравствуйте. Я <strong>Иван Петров</strong> из казначейства, прямой номер <strong>+7 916 555-01-02</strong>.&raquo;</p>
+        </div>
+        <span class="compare-arrow" aria-hidden="true">&rarr;</span>
+        <div>
+          <h3>In the request to the model</h3>
+          <p>&laquo;Здравствуйте. Я <code>[PERSON_1]</code> из казначейства, прямой номер <code>[PHONE_1]</code>.&raquo;</p>
+        </div>
+      </div>
+
+      <figure class="shot reveal">
+        <img src="screenshots/app-review.png" width="1280" height="904" loading="lazy" alt="The review screen. Under the heading what will go to the model, the masked text carries the tokens [PERSON_1], [PHONE_1], [PHONE_2], [PHONE_3] and [ADDRESS_1].">
+        <figcaption>The review screen. Everything the provider will see, before the request.</figcaption>
+      </figure>
+
+      <p>A person is one token whatever the case. &laquo;Ольга Николаевна&raquo;, &laquo;Ольги Николаевны Смирновой&raquo; and &laquo;Ольге Николаевне&raquo; all become <code>[PERSON_1]</code>, and the reply is restored with the case the model asks for.</p>
+      <p>The model reads the text in windows of 512 tokens that overlap by 128, with a confidence threshold of 0.3. The rule layer only fills the gaps the model left, because a rule that argues with the model costs accuracy on the cases the model already gets right.</p>
+    </section>
+
+    <section class="section wrap" id="screens" aria-labelledby="screens-title">
+      <h2 id="screens-title">The app</h2>
+      <p class="lede">Screenshots from the current build, taken by <code>npm --prefix web run shots</code>. The meeting in them is invented: the names, the phone number, the passport and the address are made up.</p>
+      <div class="cards">
+        <figure class="card reveal">
+          <img src="screenshots/app-empty.png" width="2560" height="1800" loading="lazy" alt="The empty state. A drop area takes the recording, and a notice says that without a key the recording is still transcribed and masked, but the model will not answer.">
+          <figcaption>The empty state.</figcaption>
+        </figure>
+        <figure class="card reveal">
+          <img src="screenshots/app-diarization.png" width="2560" height="1800" loading="lazy" alt="The transcript split into turns. Each turn carries a speaker label and a timecode, and the personal data found in the text is highlighted.">
+          <figcaption>Turns carry a speaker label and a timecode. The labels are relative: the app never tells you who spoke.</figcaption>
+        </figure>
+        <figure class="card reveal">
+          <img src="screenshots/app-search.png" width="2560" height="1800" loading="lazy" alt="A search in the transcript. The match is highlighted in the text, and the field above it counts the hits and steps through them.">
+          <figcaption>Search inside a transcript. Matches are highlighted, and the arrows step through them.</figcaption>
+        </figure>
+        <figure class="card reveal">
+          <img src="screenshots/app-history.png" width="2560" height="1800" loading="lazy" alt="The history in the left rail. The recordings are listed with a name and a note of what was done to them, and one of them is being renamed.">
+          <figcaption>Up to 50 recordings, with search by name, rename and delete.</figcaption>
+        </figure>
+        <figure class="card reveal">
+          <img src="screenshots/app-settings.png" width="2560" height="2346" loading="lazy" alt="The settings panel. It names the provider, takes the key, and holds the three summary modes and a field for your own requirements.">
+          <figcaption>The provider, the key and the three summary modes.</figcaption>
+        </figure>
+        <figure class="card reveal">
+          <img src="screenshots/app-dark-results.png" width="2560" height="1800" loading="lazy" alt="The same result document in the dark theme, with the summary on top and the transcript below.">
+          <figcaption>Light and dark themes.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section wrap" id="install" aria-labelledby="install-title">
+      <h2 id="install-title">Install</h2>
+      <p class="lede">The desktop app carries the models inside the bundle, so nothing is downloaded at run time.</p>
+
+      <div class="command">
+        <button class="button button-ghost" type="button" data-copy="./download_models.sh&#10;./desktop/build.sh&#10;./desktop/verify.sh" data-copy-label="Copied">Copy</button>
+        <pre><code>./download_models.sh      # the ONNX models, about 0.7 GB, once
+./desktop/build.sh        # the target follows the platform: mac or linux
+./desktop/verify.sh       # the bundle, the models and a real inference</code></pre>
+      </div>
+
+      <div class="table-wrap" role="region" aria-label="Build targets" tabindex="0">
+        <table>
+          <thead>
+            <tr><th scope="col">Platform</th><th scope="col">Command</th><th scope="col">Artefact</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">macOS 13 or newer, Apple Silicon</th><td><code>./desktop/build.sh --mac</code></td><td><code>.dmg</code> and <code>.zip</code>, arm64</td></tr>
+            <tr><th scope="row">Linux</th><td><code>./desktop/build.sh --linux</code></td><td><code>AppImage</code> and <code>.deb</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Nothing is cross-compiled. A macOS bundle is built on a Mac and the Linux targets on Linux, because PyInstaller and onnxruntime produce a binary only for the machine that builds them.</p>
+
+      <p>For development on any machine, Docker runs the same sidecar and the same interface:</p>
+      <div class="command">
+        <button class="button button-ghost" type="button" data-copy="./download_models.sh&#10;docker compose up --build" data-copy-label="Copied">Copy</button>
+        <pre><code>./download_models.sh
+docker compose up --build</code></pre>
+      </div>
+      <p class="fine">The interface is on <code>http://localhost:3000</code> and the API on <code>http://localhost:8000/docs</code>.</p>
+    </section>
+
+    <section class="section wrap" id="policy" aria-labelledby="policy-title">
+      <h2 id="policy-title">For the administrator</h2>
+      <p class="lede">One JSON file fixes the rules of the machine. It is read at start, so the app needs a restart after a change. A key that is left out is not enforced, and a bad value is reported in the interface and skipped rather than stopping the app.</p>
+
+      <div class="table-wrap" role="region" aria-label="Policy keys" tabindex="0">
+        <table>
+          <thead>
+            <tr><th scope="col">Key</th><th scope="col">What it does</th><th scope="col">Default</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>base_url</code></td><td>Fixes the provider address; the interface cannot change it.</td><td>not fixed</td></tr>
+            <tr><td><code>lock_settings</code></td><td>Locks every setting in the interface.</td><td><code>false</code></td></tr>
+            <tr><td><code>retention_days</code></td><td>Deletes recordings older than that, with their transcripts.</td><td>not set</td></tr>
+            <tr><td><code>allow_export</code></td><td><code>false</code> hides the <code>.txt</code> export, the print and the copy buttons.</td><td><code>true</code></td></tr>
+            <tr><td><code>zdr</code></td><td><code>true</code> allows only providers with a zero data retention policy.</td><td><code>false</code></td></tr>
+            <tr><td><code>data_collection</code></td><td><code>deny</code> or <code>allow</code>, the same switch as <code>LLM_DATA_COLLECTION</code>.</td><td><code>deny</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="fine">The file is <code>PROTOKOL_POLICY_FILE</code>, by default <code>/Library/Application Support/Protokol/policy.json</code>. The example is <a href="policy.example.json">policy.example.json</a> and the guide is <a href="ADMIN.md">ADMIN.md</a>.</p>
+
+      <p>Two settings decide what the provider may do with the prompt. <code>LLM_DATA_COLLECTION</code> defaults to <code>deny</code>, which keeps the request away from providers that store prompts or train on them. <code>LLM_ZDR</code> set to <code>1</code> allows only endpoints with a zero data retention policy; some models have none, and the request then fails.</p>
+
+      <p>The app runs for 14 days from the first launch. After that it needs a signed licence file, installed in Settings. The history, the cache and the settings sit next to each other in <code>~/Library/Application Support/sttshka-desktop/</code> with the rights 0600, and the app warns when FileVault is off. The interface language is Russian.</p>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <p>Protokol is MIT licensed. © 2025-2026 Alexander Blinov. Version 0.1.0.</p>
+      <nav class="footer-nav" aria-label="Project links">
+        <a href="https://github.com/aa-blinov/protokol">Source</a>
+        <a href="https://github.com/aa-blinov/protokol#readme">README</a>
+        <a href="https://github.com/aa-blinov/protokol/blob/master/docs/PRODUCT.md">Product</a>
+        <a href="https://github.com/aa-blinov/protokol/blob/master/docs/ADMIN.md">Administrators</a>
+        <a href="https://github.com/aa-blinov/protokol/blob/master/docs/LICENSING.md">Licences</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="site.js" defer></script>
+</body>
+</html>
