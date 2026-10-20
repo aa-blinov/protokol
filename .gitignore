@@ -35,7 +35,7 @@ sessions.json
 
 # Tool scratch: canvas assets and critique snapshots are per-run, not source.
 .mavis/
-.impeccable/
+.impeccable/*
 
 # Analysis cache (transcripts) written by the dev API when run from the repo root
 /cache/
@@ -47,6 +47,11 @@ benchmarks/pilot/data/
 # Licence and trial markers kept beside the settings file when the app runs from the repo.
 trial.json
 license.json
+
+# The house standard's own files. The rule above
+# was meant for the repository's config, not for these.
+!.impeccable/config.json
+!.impeccable/design.json
 
 # The house standard's own files. The rule above
 # was meant for the repository's config, not for these.
