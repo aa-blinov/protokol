@@ -120,4 +120,3 @@ def test_char_times_aligns_the_cleaned_text_to_the_token_stream():
 
 def test_char_times_without_timestamps_is_all_zero():
     assert Stt._char_times(["a"], None, "a") == [0.0]
-

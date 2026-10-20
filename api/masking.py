@@ -418,4 +418,3 @@ def bind_requirements(text: str, spans: list[Span], entity_map: dict[str, str]) 
         raise UnboundRequirement(unbound)
     pieces.append(text[cursor:])
     return "".join(pieces)
-

@@ -1,436 +1,182 @@
-# Протокол
+# Protokol
 
-Приватная расшифровка встреч: запись превращается в транскрипт, персональные
-данные в нём маскируются, и только обезличенный текст уходит в LLM. Оригиналы
-остаются на машине.
+Transcribe a meeting recording on your own machine, mask the personal data in the transcript, and send only the tokenized text to a language model. The reply comes back with the names restored locally, and the original recording never leaves the computer.
 
-Продуктовая документация: [docs/PRODUCT.md](docs/PRODUCT.md). Для администраторов: [docs/ADMIN.md](docs/ADMIN.md). Выдача лицензий: [docs/LICENSING.md](docs/LICENSING.md).
+![The finished result: a transcript with highlighted entities, the masked text and the model reply](docs/screenshots/app-results.png)
 
-![Готовый результат: транскрипт с подсветкой сущностей, маскированный текст и ответ модели](docs/screenshots/app-results.png)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-## Что умеет
+Product documentation: [docs/PRODUCT.md](docs/PRODUCT.md). For administrators: [docs/ADMIN.md](docs/ADMIN.md). Issuing licences: [docs/LICENSING.md](docs/LICENSING.md).
 
-- Расшифровка записи на CPU, локально. Длительность не ограничена:75-минутная
-  запись разбирается примерно за полторы минуты.
-- Маскирование персональных данных перед отправкой в модель.
-- Разделение по говорящим для встреч с несколькими участниками.
-- Протокол встречи (суть, решения, задачи) с учётом того, кто что сказал, и с обратной подстановкой ПДн.
-- Протокол выводится документом: заголовки, списки и выделения, без разметочных символов.
-- Копирование транскрипта и ответа, выгрузка отчёта в `.txt` и печать/сохранение в PDF.
-- История сессий на этом Mac: файл `sessions.json` рядом с настройками, до 50 записей;
-  поиск по названию, переименование и удаление.
-- Светлая и тёмная темы.
+---
 
-## Зачем это нужно
+## Quick start
 
-Отправить транскрипт рабочего звонка в LLM напрямую означает отдать туда имена,
-номера телефонов, паспортные данные и реквизиты. Этот инструмент разрывает цепочку
-перед самой моделью: в OpenRouter уходит текст, в котором вместо личных данных
-стоят токены вида `[PERSON_1]`, `[PHONE_1]`, `[PASSPORT_1]`. Ответ модели
-разбирается локально, токены заменяются обратно на оригиналы, и восстановленный
-текст никуда не уходит.
-
-```
-Аудио → транскрипт → маскирование PII → OpenRouter → разбор ответа → итог
-        локально      локально            единственное   локально
-                                      обращение в сеть
-```
-
-## Скриншоты
-
-**Пустое состояние.** Запись перетаскивается в окно или выбирается файлом. Это же
-окно объясняет, что происходит с данными: `01 · АУДИО → 02 · МАСКИРОВАНИЕ → 03 · ПРОТОКОЛ`.
-
-![Пустое состояние: пояснение продукта и зона перетаскивания](docs/screenshots/app-empty.png)
-
-**Результат.** Один документ: выжимка сверху, ниже транскрипт с подсветкой
-найденных сущностей и свёрнутый блок «что уходит в модель». Разделы сворачиваются,
-выжимки по режимам хранятся все сделанные — переключение между ними не
-обращается к модели. Плашки `PERSON_1`, `PHONE_1` показывают, что именно было
-скрыто.
-
-![Готовый результат: документ с выжимкой и сворачиваемыми разделами](docs/screenshots/app-results.png)
-
-**Встреча с несколькими участниками.** Транскрипт разбит по репликам: метка
-говорящего и таймкод слева, текст справа; подсветка сущностей внутри реплик.
-
-![Диаризация: реплики с метками говорящих и таймкодами](docs/screenshots/app-diarization.png)
-
-**Поиск по расшифровке.** Поле стоит в шапке документа и остаётся доступным,
-когда раздел свёрнут; совпадения подсвечены, Enter листает их дальше.
-
-![Поиск: совпадения подсвечены в расшифровке](docs/screenshots/app-search.png)
-
-**Тёмная тема.** Та же система на тёмном фоне, переключается в шапке.
-
-![Тёмная тема: документ с протоколом](docs/screenshots/app-dark-results.png)
-
-**Настройки.** Сервис для текста списком, ключ и его состояние.
-
-![Настройки: выбор сервиса и состояние ключа](docs/screenshots/app-settings.png)
-
-![Настройки в тёмной теме](docs/screenshots/app-dark-settings.png)
-
-**История.** Поиск по названию и переименование прямо в списке.
-
-![История: переименование сессии](docs/screenshots/app-history.png)
-
-**На 375px.** Одна колонка без горизонтальной прокрутки.
-
-![Мобильный вид: онбординг в одну колонку](docs/screenshots/app-empty-mobile.png)
-
-Снимки делает `npm --prefix web run shots` из текущей сборки. Встреча в них вымышленная:
-имена, телефон, паспорт и адрес придуманы, реальных данных нет.
-
-## Что внутри
-
-| Этап | Модель | Рантайм |
-| --- | --- | --- |
-| STT | `istupakov/gigaam-v3-onnx` (вариант `e2e-rnnt`, `int8`) | `onnx-asr`, CPU |
-| PII-NER | `lockR/rubert-base-pii-ner-onnx` | `onnxruntime`, CPU |
-| Диаризация | `onnx-community/pyannote-segmentation-3.0` + 3D-Speaker `CAM++` | `onnxruntime`, CPU |
-| LLM | OpenRouter API | `httpx` |
-
-Диаризация включается сама, когда в записи больше одного говорящего: сегментация
-pyannote находит смены говорящего, модель CAM++ считает голосовой эмбеддинг каждой
-реплики, а кластеризация по косинусу разводит их по спикерам. Транскрипт показывается
-репликами с метками «Спикер 1/2/…» и таймкодами. Модели маленькие (~33 МБ) и лежат в
-`models/`; без них приложение работает, просто без меток.
-
-## Модели и лицензии
-
-| Модель | Источник | Лицензия |
-| --- | --- | --- |
-| STT, GigaAM v3 (e2e RNN-T) | [ai-sage/GigaAM-v3](https://huggingface.co/ai-sage/GigaAM-v3), ONNX-экспорт [istupakov/gigaam-v3-onnx](https://huggingface.co/istupakov/gigaam-v3-onnx) | MIT |
-| PII-NER | [redmadrobot-rnd/rubert-base-pii-ner](https://huggingface.co/redmadrobot-rnd/rubert-base-pii-ner), ONNX-экспорт [lockR/rubert-base-pii-ner-onnx](https://huggingface.co/lockR/rubert-base-pii-ner-onnx) | Apache-2.0 |
-| Основа PII-NER | [ai-forever/ruBert-base](https://huggingface.co/ai-forever/ruBert-base) | Apache-2.0 |
-| Обучающие данные PII-NER | [redmadrobot-rnd/pii_train](https://huggingface.co/datasets/redmadrobot-rnd/pii_train) | MIT |
-| Сегментация речи | [pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0), ONNX-экспорт [onnx-community/pyannote-segmentation-3.0](https://huggingface.co/onnx-community/pyannote-segmentation-3.0) | MIT |
-| Голосовые эмбеддинги, CAM++ | 3D-Speaker (ModelScope), ONNX-экспорт [Luigi/campplus-zh-en-onnx](https://huggingface.co/Luigi/campplus-zh-en-onnx) | Apache-2.0 |
-| Морфологические словари | [pymorphy3-dicts-ru](https://pypi.org/project/pymorphy3-dicts-ru/) | код MIT, данные CC BY-SA |
-
-Спасибо Red Mad Robot R&D за модель PII-NER и её обучающие данные. Карточка модели
-просит указывать авторов и ссылаться на исходный репозиторий при публикации результатов.
-Apache-2.0 и CC BY-SA требуют сохранять уведомления о лицензии при распространении.
-Условия pyannote принимаются на странице модели. Наборы для оценки (PII-Bench,
-`redmadrobot-rnd/pii_benchmark`) в репозиторий не входят.
-
-## Установка
-
-Два варианта, выберите по машине.
-
-**1. Нативное десктоп-приложение.** То, чем пользуется конечный пользователь.
-Двойной клик, без Docker и терминала. Основная цель: MacBook (Apple Silicon),
-Linux-сборка тоже собирается и проверена.
+The desktop app carries the models inside the bundle, so nothing is downloaded at run time.
 
 ```bash
-./desktop/build.sh           # цель выбирается по платформе: mac или linux
-./desktop/build.sh --mac     # только на маке: бандл не кросс-компилируется
+./download_models.sh      # the ONNX models, about 0.7 GB, once
+./desktop/build.sh        # the target follows the platform: mac or linux
+./desktop/verify.sh       # the bundle, the models and a real inference
 ```
 
-Сборка получается самостоятельной: внутри лежит Python-сайдкар (ONNX-рантайм,
-разборщик аудио на PyAV, модели весом ~0.7 ГБ) и веб-интерфейс. Отдельно
-устанавливать модели не нужно: на этапе сборки они вшиваются в приложение, и
-при запуске ничего не докачивается.
+| Platform | Command | Artefact |
+| --- | --- | --- |
+| macOS 13 or newer, Apple Silicon | `./desktop/build.sh --mac` | `.dmg` and `.zip`, arm64 |
+| Linux | `./desktop/build.sh --linux` | `AppImage` and `.deb` |
 
-Проверка готовой сборки: `./desktop/verify.sh`
+Nothing is cross-compiled. A macOS bundle is built on a Mac and the Linux targets on Linux, because PyInstaller and `onnxruntime` produce a binary only for the machine that builds them.
 
-Проверка интерфейса живёт в `benchmarks/ui_audit.py` и запускается сама из
-`verify.sh`: обходит три экрана в обеих темах, сверяет контраст каждой пары
-«текст на фоне» по WCAG 1.4.3, меряет переполнение на четырёх ширинах и при
-зуме 200 %, и рендерит печать, чтобы убедиться, что на бумаге не остаётся ни
-одной кнопки. Свой минимальный WebSocket-клиент лежит рядом — `verify.sh`
-зовёт системный `python3`, где нет `websocket`, а проверка, которая молча
-пропускает себя, хуже отсутствующей: она превращает «проверено» в «ничего не
-произошло».: поднимает сайдкар, загружает
-модели и прогоняет настоящее маскирование.
-
-Подробнее о сборке и о том, что именно попадает в бандл: [DESKTOP.md](DESKTOP.md).
-
-**2. Docker.** Для разработки и проверки на любой машине:
+Docker, for development on any machine:
 
 ```bash
-# 1. Модели, ~0.7 ГБ, один раз
 ./download_models.sh
-
-# 2. Поднять
 docker compose up --build
 ```
 
-UI: http://localhost:3000 · API: http://localhost:8000/docs
+The interface is on http://localhost:3000 and the API on http://localhost:8000/docs.
 
-Ключ OpenRouter и модель задаются **в самом приложении**: «Настройки» в левой панели →
-вставьте ключ, нажмите «Проверить ключ», выберите модель из списка с поиском.
-В Docker то же самое: `GET /api/settings` покажет, есть ли ключ. Переменные
-`OPENROUTER_API_KEY` и `LLM_MODEL` по-прежнему работают и имеют приоритет над
-файлом — они нужны для CI и headless-запусков, где диалога нет.
+The app runs without a licence for 14 days from the first launch. After that it needs a signed licence file, installed in Settings.
 
-Что уходит провайдеру, настраивается переменными окружения (значения по умолчанию безопасны):
+## What it does
 
-- `LLM_DATA_COLLECTION` — `deny` (по умолчанию): запрос не попадает к провайдерам, которые
-  хранят промпты или обучаются на них. `allow` возвращает поведение OpenRouter по умолчанию.
-- `LLM_ZDR=1` — только эндпоинты с политикой Zero Data Retention. Включайте, если нужна
-  эта гарантия: для части моделей таких эндпоинтов нет, и запрос тогда падает с ошибкой.
-- `LLM_REASONING_EFFORT` — насколько модель рассуждает перед ответом (`low`, `medium`,
-  `high`); пусто — как у провайдера.
+- **Transcribe on the CPU, locally.** The audio is decoded in process and recognised by GigaAM v3 (ONNX, int8). There is no limit on the length of a recording: a 75-minute file, 137 MB, was recognised in 1 minute 25 seconds.
+- **Mask personal data before anything is sent.** Names, phones, passports, tax and insurance numbers, cards, addresses and access tokens become tokens such as `[PERSON_1]` and `[PHONE_1]`.
+- **Split a recording by speaker.** Turns carry a speaker label and a timecode. The labels are relative: the app never tells you who spoke.
+- **Read what the model will get, and what it costs.** The whole masked text and a cost estimate are on screen before the request, and a transcript with no summary is a legitimate outcome.
+- **Summarise in three modes, or with your own requirements.** Decisions and tasks, a short retelling, agreements between the parties. The requirements field is added to the mode, and personal data named there is masked as well.
+- **Run the summary again without listening again.** A second mode costs one model call and no transcription: 0.025 s against 1.29 s on the same file.
+- **Keep a history on this machine.** Up to 50 recordings in a file next to the settings, with search by name, rename and delete.
+- **Export the result.** Copy the transcript or the reply, download a `.txt`, or print to PDF.
+- **Search inside a transcript.** Matches are highlighted and Enter steps through them.
+- **Light and dark themes.**
 
-Персональные данные в требованиях к выжимке («Свои требования») маскируются так же,
-как расшифровка: имя, которое есть в записи, заменяется её токеном, а незнакомое
-имя блокирует запрос с сообщением, что именно нужно убрать.
+## Screenshots
 
-> Сборка бандла идёт платформа за платформой, без кросс-компиляции: `.app` собирается
-> только на macOS (нужны инструменты Xcode для подписи), а Linux-таргеты
-> (`AppImage`, `deb`) собираются на Linux. `onnxruntime` с CoreML ставится под arm64-маком.
+| The empty state | The result |
+| :---: | :---: |
+| ![The empty state explains what happens to the data](docs/screenshots/app-empty.png) | ![A document with a summary and collapsible sections](docs/screenshots/app-results.png) |
 
-## API
+| A meeting with several speakers | Search inside the transcript |
+| :---: | :---: |
+| ![Turns with speaker labels and timecodes](docs/screenshots/app-diarization.png) | ![Matches highlighted in the transcript](docs/screenshots/app-search.png) |
 
-| Метод | Путь | Вход | Выход |
-| --- | --- | --- | --- |
-| POST | `/api/transcribe` | multipart `file` | `text`, `duration_sec` |
-| POST | `/api/mask` | `{"text": "..."}` | `masked_text`, `entity_map`, `entities` |
-| POST | `/api/analyse` | multipart `file` | NDJSON-поток: расшифровка, спикеры, маскирование |
-| POST | `/api/summarize` | `{"cache_key": "...", "model": "...", "preset": "..."}` | `reply`, `reply_unmasked`, `cost` |
-| POST | `/api/estimate` | `{"chars": 25000, "model": "..."}` | `tokens_in`, `requests`, `total` |
-| GET | `/api/model-prices` | нет | цены всех моделей каталога, USD за миллион токенов |
-| POST | `/api/process` | multipart `file` + `llm_model` | NDJSON-поток: всё сразу, в один проход |
-| GET | `/api/settings` | нет | `has_key`, `key_hint`, `model`, `base_url` — сам ключ не возвращается |
-| POST | `/api/settings` | `{"key": "...", "model": "..."}` | сохранено или причина отказа; пустые поля означают «оставить как есть» |
-| POST | `/api/settings/verify` | `{"key": "...", "remember": true}` | проверка ключа через `/credits` OpenRouter |
-| GET | `/api/models` | нет | каталог OpenRouter (458 моделей) для выпадашки с поиском |
-| GET | `/api/health` | нет | наличие моделей и ключа |
+| The settings panel | The history |
+| :---: | :---: |
+| ![The provider and the state of the key](docs/screenshots/app-settings.png) | ![Renaming a session in the history](docs/screenshots/app-history.png) |
 
-## Два этапа вместо одного
+![The same document in the dark theme](docs/screenshots/app-dark-results.png)
 
-Пайплайн разделён на `/api/analyse` и `/api/summarize`, потому что эти две
-части стоят разного:
+![The empty state on a 375 px screen](docs/screenshots/app-empty-mobile.png)
 
-- **расшифровка** — дорогая по времени (≈30 с на 20 минут аудио на CPU) и
-  бесплатная: наружу не уходит ничего;
-- **выжимка** — платная, но мгновенная: это один вызов модели.
+The screenshots are taken from the current build by `npm --prefix web run shots`. The meeting in them is invented: the names, the phone number, the passport and the address are made up.
 
-Разделение даёт три вещи, которых не было у `/api/process`:
+## How it works
 
-1. **Повторная выжимка без повторной расшифровки.** Смена режима выжимки или
-   правка требования стоит только вызова модели. На замере: повторный прогон
-   того же файла — 0,025 с против 1,29 с.
-2. **Экран проверки перед отправкой.** Маскированный текст можно прочитать
-   целиком и увидеть смету до того, как что-либо уйдёт.
-3. **Кэш по содержимому.** Ключ — `sha256(аудио + расширение + каталог модели)`,
-   так что другой файл или другая модель распознавания никогда не получит
-   чужую расшифровку. Хранится 8 последних записей рядом с файлом настроек.
+```
+recording -> decode -> transcript -> speakers -> mask -> provider -> restore
+             local     local, CPU    local      local    one call    local
+```
 
-`/api/process` оставлен: он нужен скриптам и тестам, и по-прежнему делает всё
-за один проход. Приложение его не вызывает.
+The desktop app is one process tree. An Electron window loads a page from a Python sidecar that listens on `127.0.0.1`; the sidecar serves the built web interface and the API from the same origin, so there is no proxy and no CORS. Under Docker the same sidecar sits behind nginx, with the interface in a container of its own.
 
-`/api/analyse`, как и `/api/process`, отдаёт поток `application/x-ndjson`: по
-одной JSON-строке на этап, последняя несёт полный результат. Так UI показывает
-честный прогресс-бар, а не имитацию.
+The recording is decoded to 16 kHz mono by PyAV, whose wheel carries the FFmpeg libraries, so the app needs no `ffmpeg` on the machine. GigaAM v3 recognises the speech in chunks of at most 20 seconds, each cut at the quietest frame near the limit so a cut rarely lands inside a word. Speaker turns come from pyannote segmentation plus a CAM++ voice embedding, grouped by cosine clustering. Both diarization models are optional: without them the app still transcribes, it just cannot name the turns.
 
-### Смета
+Masking has two layers. A ruBERT PII model finds the entities that depend on meaning, in windows of 512 tokens that overlap by 128, with a confidence threshold of 0.3. A rule layer covers the identifiers whose format can be checked mechanically: the tax id, the social insurance number, a card number by the Luhn algorithm, the passport, the phone, the insurance policy number, one-time codes and access tokens. The rule layer only fills the gaps the model left, because a rule that argues with the model costs accuracy on the cases the model already gets right.
 
-`/api/estimate` считает не «один запрос», а столько запросов, сколько пайплайн
-реально сделает: `llm.MEETING_MAP_CHARS` = 24 000 знаков, дальше текст режется
-на куски по 8 000 и сначала сжимается. Часовая запись — это десятки запросов, и
-смета по одной цене за один запрос занижала бы счёт в разы.
+A person is one token whatever the case. "Ольга Николаевна", "Ольги Николаевны Смирновой" and "Ольге Николаевне" all become `[PERSON_1]`, and the reply is restored with the case the model asks for, using the Russian morphology dictionaries.
 
-Две константы в смете — предположения, а не измерения: `PARTIAL_COMPRESSION`
-(0,15) и `TYPICAL_PARTIAL_TOKENS` (400). Ни одна запись длиннее одного запроса
-ещё не прогонялась целиком с замером. На них влияет только цифра «примерно» до
-отправки; точная сумма приходит от провайдера в `tokens_in`/`tokens_out` и
-показывается после выжимки.
+Only masked text reaches the provider. The model returns a protocol in which the tokens are still there, the tokens are replaced by the original values on the machine, and the restored text is never sent anywhere.
 
-## Маскирование
+The pipeline is split in two on purpose. Transcription takes about 30 s for a 20-minute recording and costs nothing, because nothing leaves the machine. The summary is one call to the provider and it costs money. `/api/analyse` produces the transcript, the speakers and the masked text; `/api/summarize` produces the summary over an already analysed recording, so a second mode costs one call and no transcription. The analysed transcript is cached under a digest of the audio bytes, the file format, the model directory and a pipeline version, and the cache holds the eight most recent recordings.
 
-Каждая сущность заменяется на токен вида `[PERSON_1]`, `[PHONE_1]`,
-`[PASSPORT_1]`. Таблица подстановок возвращается вместе с ответом
-(`entity_map`), после ответа модели токены обратно заменяются на оригиналы:
-локально, поэтому восстановленный текст никуда не уходит.
+## Configuration
 
-Токены в скобках: так модель сохраняет их дословно, а обратная подстановка не
-путает их с обычным текстом.
+Everything the app needs at run time lives in one file next to the settings, `.env` by default, or the file the desktop shell points at with `STTSHKA_ENV_FILE`. The settings panel in the interface writes the same file, so a key typed there works on the next request without a restart.
 
-Сущности модели (21 тип) сводятся к типам подсветки:
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `OPENROUTER_API_KEY` | none | The provider key. A value already in the environment wins over the file. |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | The provider address. Any service with an OpenAI-compatible API works. |
+| `LLM_MODEL` | `deepseek/deepseek-v4.1-flash` | The model that writes the summary. |
+| `LLM_PRESET` | `decisions` | The default summary mode. |
+| `LLM_EXTRA` | none | Extra requirements for the summary. |
+| `LLM_PROVIDER_KEYS` | none | The keys of several providers, as one JSON object keyed by address. |
+| `LLM_DATA_COLLECTION` | `deny` | What the provider may do with the prompt. `deny` keeps requests away from providers that store prompts or train on them. |
+| `LLM_ZDR` | `0` | `1` allows only endpoints with a zero data retention policy. Some models have none, and the request then fails. |
+| `LLM_REASONING_EFFORT` | none | How hard the model reasons: `low`, `medium` or `high`. |
+| `INFERENCE_THREADS` | `4` | The ONNX Runtime threads. |
+| `USE_COREML` | `0` | The CoreML execution provider on Apple Silicon. Off, because it measured slower on these models. |
+| `MODELS_DIR` | `models/` beside `api/` | Where the ONNX models are. |
+| `WEB_DIST_DIR` | `web/dist` | The built interface the sidecar serves. |
+| `RETENTION_DAYS` | `0` | How many days of history to keep. `0` keeps everything. |
+| `PROTOKOL_POLICY_FILE` | `/Library/Application Support/Protokol/policy.json` | The organisation's policy file. |
+| `HOST`, `PORT` | `127.0.0.1`, `8000` | The address the sidecar listens on. |
 
-| Тип | Что входит |
+An administrator can fix the rules of the machine with one JSON file, read at start and applied after a restart. A key that is left out is not enforced, and a bad value is reported in the interface and skipped rather than stopping the app.
+
+| Key | What it does |
 | --- | --- |
-| `PERSON` | `FIRST_NAME`, `LAST_NAME`, `MIDDLE_NAME` |
-| `ADDRESS` | `COUNTRY`, `REGION`, `DISTRICT`, `CITY`, `STREET`, `HOUSE` |
-| `CARD` | `CREDIT_CARD` |
-| `PHONE`, `EMAIL`, `URL`, `IP` | как в модели |
-| `PASSPORT`, `INN`, `SNILS`, `OMS`, `DRIVER_LICENSE`, `MILITARY_ID`, `BIRTH_CERTIFICATE` | как в модели |
+| `base_url` | Fixes the provider address; the interface cannot change it. |
+| `lock_settings` | Locks every setting in the interface. |
+| `retention_days` | Deletes recordings older than that, with their transcripts. |
+| `allow_export` | `false` hides the `.txt` export, the print and the copy buttons. |
+| `zdr` | `true` allows only providers with a zero data retention policy. |
+| `data_collection` | `deny` or `allow`, the same switch as `LLM_DATA_COLLECTION`. |
 
-Соседние сущности одного типа склеиваются в один токен, поэтому
-«Иван Петров» становится `[PERSON_1]`, а не двумя токенами. Граница склейки:
-пробелы и разделители-запятые; через слово сущности не склеиваются.
+The example file is [docs/policy.example.json](docs/policy.example.json), and the guide for administrators is [docs/ADMIN.md](docs/ADMIN.md). The interface language is Russian.
 
-Поверх модели работает слой правил для **структурных** ПДн, тех, где промах
-модели означает утечку, а формат проверяем машинно: IP-адрес, ИНН, СНИЛС, номер
-карты (алгоритм Луна), паспорт, телефон, полис ОМС. Правила находят их регулярным
-выражением и контрольной суммой, поэтому не зависят от вероятности модели: там,
-где модель рвёт `ИНН 7707083893` на `770708389` + хвост `3`, правило закрывает
-целиком. Слабое место правил: форматы без контрольной суммы (водительское
-удостоверение); их по-прежнему ловит модель. Если спан модели и спан правила
-пересекаются, остаётся более длинный. Маскировать лишнее безопасно, пропустить
-нельзя.
-
-Длинные тексты режутся окнами 512 токенов со стридом 128, порог уверенности 0.3.
-
-Правила также закрывают номера ОГРНИП (только рядом со словом «ОГРНИП»), трёхзначный код
-с обратной стороны карты (рядом со словом «код», «CVC» или «ввожу» и в тексте про карту или
-оплату), трёхзначный код без всякого контекста (как секрет), одноразовые коды и токены доступа
-(тип `SECRET`), номера домов, квартир, подъездов и этажей, название улицы после «ул.» и дефисные
-географические названия вроде «Санкт-Петербург», фамилию после «ИП», даже строчными буквами,
-MAC-адреса (как `NUMBER`, а не как IP) и 11-значные номера, которые начинаются с 7 или 8, как
-телефоны. КПП и ОГРН юридических лиц, регистрационный номер компании и 13-значный номер в
-реквизитах или у поставщика маскируются типом `ORG_ID`: это не персональные данные, но они
-называют контрагента, поэтому в модель уходят только маской.
-
-Проверка на внешнем наборе PII-Bench (ru, 1 810 примеров, синтетика, Apache-2.0): токен-F1
-96.8, точность 98.2, полнота 95.5. Покрытие считается по итоговой маске, той, что видит
-модель. Полностью покрыты ИНН, СНИЛС, номер карты, телефон, e-mail, КПП, ОГРН, CVC, имена и
-значимые части адреса. ОГРНИП и токены покрыты на 98.9% (по одному пропуску из 87 и 95). У
-паспорта маскируются все цифры, а слова «серия» и «номер» остаются открытыми. Официальный
-бенчмарк модели (2 839 предложений): F1 96.4.
-
-## Протокол встречи
-
-В модель уходит **маскированный диалог с метками говорящих и таймкодами**:
-`Спикер 2 [12:34]: …`. Так она видит, кто что сказал, а персональные данные уже
-заменены токенами, порядок не меняется: сначала маскируем, потом отправляем.
-Модель возвращает протокол: суть встречи, ключевые обсуждённые пункты, принятые
-решения, задачи (что, кто, срок, если названо), открытые вопросы. Токены в
-ответе заменяются обратно на оригиналы локально.
-
-Длинная встреча (больше ~24 000 символов) сначала сжимается по частям, затем
-протокол собирается из тезисов: один запрос не тащит час транскрипта целиком.
-На каждом шаге отправляется только маскированный текст.
-
-## Транскрибация встречи
-
-Запись распознаётся **одним проходом по всему аудио**: модель держит контекст
-целиком, а не по кусочкам-репликам, и возвращает таймкод каждого слова.
-Диаризация даёт реплики говорящих, и каждое слово привязывается к той реплике, в
-которой оно **началось**: так текст остаётся цельным и промаркирован, а не рвётся
-по границам. Длинные записи режутся на куски по тишине (≤120 с) со сдвигом
-таймкодов на смещение куска.
-
-## Важно: почему STT берёт `e2e`
-
-Обычная голова `gigaam-v3` распознаёт продиктованные цифры словами:
-«восемь девятьсот двенадцать...». NER не считает это номером телефона, и число
-уходит в OpenRouter открытым. Вариант `e2e` нормализует цифры и ставит
-пунктуацию, после чего NER корректно заменяет номер на `[PHONE_1]`. Это
-требование приватности, а не вопрос качества распознавания.
-
-Голова выбрана по измерениям при одинаковых кусках по 20 с: `e2e-rnnt` даёт 3.84%
-ошибок в словах на FLEURS (300 фрагментов, звук нормирован) против 4.09% у
-`e2e-ctc`, и 4.00% на записи с эталоном против 4.35%. Скорость одинаковая, обе
-головы пишут цифрами одинаковую долю чисел. Куски важнее головы: на 120-секундных
-кусках обе головы теряли речь (на записи с эталоном CTC 5.83% против 4.35%, RNN-T 5.04% против 4.00%).
-
-Проверен и отклонён `nemo-parakeet-tdt-0.6b-v3` (int8, те же куски по 20 с): FLEURS
-7.69% против 3.84%, запись с эталоном 5.83% против 4.00%, цифр 28 из 41 против 36.
-Для маскирования номеров это хуже, поэтому модель не используется.
-
-Модель берётся в **int8**-экспорте: на тестах качество то же (0% WER на чистой
-речи, +0.8 п.п. при шуме 0 дБ: одно слово из 122), но грузится на ~0.5 ГБ
-легче (470 МБ RSS против 790) и весит втрое меньше в бандле (225 МБ против 845).
-
-## Ограничения
-
-- IP-адреса и СНИЛС: слабые места самой модели; их закрывает слой правил (см.
-  «Маскирование»), поэтому в пайплайне они маскируются. Уязвимы типы без
-  контрольной суммы и устойчивого формата, например, водительское удостоверение.
-- Пропуски на PII-Bench: по одному ОГРНИП и одному токену без слов рядом, служебные слова
-  адреса («ул», «кв») и слова «серия», «номер» у паспорта. Их не маскируем намеренно: они
-  не идентифицируют.
-- **Длинная запись (встреча) режется на куски до 120 с по тишине.** Модель STT держит
-  около 200 с за вызов, дальше ONNX-граф падает. Куски транскрибируются по очереди и
-  склеиваются.
-- **Диаризация: оценка по голосам, без имён.** Метки «Спикер 1/2/…» относительные:
-  по ним нельзя сказать, кто именно. Число говорящих не ограничено, и на реальном
-  12-минутном звонке с семью участниками модель их разводит; на 16 файлах VoxConverse
-  (in-the-wild) средняя DER ~18%. Но это именно оценка, а не гарантия: на шумной и
-  наложенной речи голосовые эмбеддинги путаются: один голос дробится на осколки, и
-  их складывает в ближайшего соседа слой кластеризации, поэтому на сложных записях
-  число меток может отличаться на 1–2. Наложенная речь не моделируется: слово
-  попадает в одну реплику (по началу слова).
-- **Почему CAM++, а не end-to-end Sortformer.** У NVIDIA Sortformer (тоже ONNX, без
-  torch) ошибка на VoxConverse ниже (~12%), но он жёстко ограничен **четырьмя**
-  говорящими, и на семи участниках он врёт по определению. CAM++ не имеет потолка и
-  на этом звонке дал все семь меток.
-- Обратная подстановка ищет токены дословно (допускаются пропавшие скобки).
-  Если модель перепишет `[PERSON_1]` в `PERSON 1`, подстановка не сработает.
-- История сессий лежит файлом `sessions.json` рядом с файлом настроек, а не в `localStorage`
-  браузера: порт приложения меняется при каждом запуске, и браузерное хранилище теряло
-  историю. БД нет.
-- На macOS включается ускорение CoreML, но проверить его включение и подпись
-  приложения можно только на самом маке, см. `./desktop/verify.sh`.
-
-## Разработка без Docker
+## Development
 
 ```bash
-./download_models.sh
-
-cd api
-python3.12 -m venv .venv    # не голый python3: на macOS это Xcode-питон 3.9/3.10
+./download_models.sh                       # the ONNX models, about 0.7 GB, once
+cd api && python3.12 -m venv .venv         # not bare python3: on macOS that is Xcode's 3.9 or 3.10
 .venv/bin/pip install -r requirements.txt
-.venv/bin/pip install pytest     # для тестов; в requirements.txt его нет
-.venv/bin/uvicorn main:app --reload --port 8000
-
-cd ../web && npm install && npm run dev   # UI на :3000, /api проксируется
+.venv/bin/pip install pytest               # for the tests; requirements.txt does not carry it
+.venv/bin/python -m pytest tests -q        # 361 tests
+cd ../web && npm install && npm run dev    # the interface on :3000, /api is proxied
+cd ../web && npm run build                 # the interface the desktop app ships
+cd ../desktop && STTSHKA_PYTHON=python3 npx electron .
 ```
 
-Нужен Python 3.11+. На macOS `python3` указывает на питон из Xcode (3.9/3.10), поэтому
-именно `python3.12`/`python3.13` из Homebrew. `desktop/build.sh` подбирает
-подходящий интерпретатор сам; здесь команды написаны явно, потому что это
-ручной сценарий.
-
-Тесты маскирования (единственное место, где ошибка молча пропускает PII) и
-тесты разбора аудио:
+Python 3.11 or newer, Node 18 or newer. The browser checks need Google Chrome and a recording:
 
 ```bash
-cd api && .venv/bin/python -m pytest tests -q
+cd web && E2E_AUDIO=/path/to/call.wav npm run e2e
+cd web && npm run shots                   # the screenshots in docs/screenshots/
 ```
 
-Проверка интерфейса в браузере (Playwright, нужен установленный Google Chrome): загрузка
-записи, выжимки по режимам, закреплённая история, тёмная тема, телефонная ширина. Скрипт сам
-поднимает сайдкар и заглушку модели, данные пишет во временную папку:
+The external PII-Bench set is not in the repository. Fetch the two parquet files from the `data` folder of `hivetrace/pii-bench` into one directory, install `pyarrow`, and run:
 
 ```bash
-cd web && E2E_AUDIO=/путь/к/записи.wav npm run e2e
+api/.venv/bin/python benchmarks/run_pii_bench_ru.py <folder with the parquet files>
 ```
 
-`E2E_TARGET=bundle` проверяет сайдкар внутри собранного приложения (нужна сборка
-`desktop/build.sh --mac`).
+| Path | What it holds |
+| --- | --- |
+| `api/main.py` | The FastAPI app and every route. |
+| `api/stt.py` | Audio decoding and speech recognition. |
+| `api/diarization.py` | Speaker turns: segmentation, embeddings, clustering. |
+| `api/ner.py` | The PII model and the windowing it runs in. |
+| `api/rules.py` | The deterministic recognizers for identifiers. |
+| `api/masking.py` | The tokens, the reverse map and the requirement binding. |
+| `api/names.py` | Russian person names: one person, one token. |
+| `api/llm.py` | The provider client, the prompts and the cost estimate. |
+| `api/settings.py` | The key, the model and the address. |
+| `api/policy.py` | The organisation's policy file. |
+| `api/licensing.py`, `api/ed25519.py` | The trial and the licence signature. |
+| `api/analysis_cache.py` | The eight cached analyses. |
+| `api/storage.py` | The files written 0600, and the FileVault check. |
+| `desktop/main.js` | The shell: a free port, the sidecar, the window. |
+| `desktop/build.sh`, `desktop/verify.sh` | The bundle for this platform, and its check. |
+| `web/src/` | The React interface. |
+| `web/e2e/` | The browser checks and the screenshot script. |
+| `benchmarks/` | The measurement scripts and the corpus builders. |
+| `tools/license_tool.py` | The vendor-side tool that issues licences. |
+| `docs/` | The product, administrator and licence documents. |
 
-Внешний набор PII-Bench (ru) в репозиторий не входит. Скачайте два файла из папки `data/`
-на [huggingface.co/datasets/hivetrace/pii-bench](https://huggingface.co/datasets/hivetrace/pii-bench/tree/main/data)
-(`domain-…parquet` и `entity-…parquet`) в одну папку. Для чтения нужен `pyarrow`, он нужен
-только бенчмарку:
+## License
 
-```bash
-api/.venv/bin/python -m pip install pyarrow
-```
+MIT, © Alexander Blinov. See [LICENSE](LICENSE).
 
-Запуск, из корня репозитория:
-
-```bash
-api/.venv/bin/python benchmarks/run_pii_bench_ru.py <папка с parquet-файлами>
-```
-
-## Отклонения от исходной схемы
-
-- `ProcessRequest.audio_url` заменён на multipart-загрузку: UI принимает файл
-  перетаскиванием, а тягать аудио по URL это лишняя поверхность для SSRF.
-- `POST /api/process` отдаёт NDJSON-поток вместо единого JSON ради прогресс-бара.
-- Приложение ходит не в `/api/process`, а в `/api/analyse` → `/api/summarize`:
-  это нужно, чтобы повторная выжимка не пересчитывала расшифровку и чтобы перед
-  отправкой можно было показать, что именно уйдёт. `/api/process` остался для
-  скриптов.
-- Вместо штатного `pii_ner.py` из репозитория модели используется свой
-  CPU-рантайм: апстрим-обёртка жёстко требует CUDA. Логика окон и разбора
-  спанов взята из неё без изменений (Apache-2.0).
-- Декодирование аудио идёт через PyAV, а не через вызов внешнего `ffmpeg`:
-  библиотеки FFmpeg поставляются вместе с питоновским пакетом и попадают в бандл,
-  так что приложению не нужен установленный `ffmpeg`.
+The third-party parts of the bundle carry their own terms, listed in [desktop/THIRD_PARTY_NOTICES.txt](desktop/THIRD_PARTY_NOTICES.txt): GigaAM (MIT), ruBERT-base-pii-ner and CAM++ (Apache-2.0), the pymorphy3 dictionaries (MIT code, CC BY-SA data) and Electron (MIT). That file also lists what the bundle does not settle: the FFmpeg libraries PyAV carries are GPL, and the access terms of the pyannote segmentation model have not been checked.
