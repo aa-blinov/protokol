@@ -1,0 +1,12 @@
+# The site is index.html and the files it loads. The documents beside it are
+# for the repository: an administrator guide, the licence procedure, the
+# product truth. Jekyll publishes every file it is not told to skip, and a
+# rendered ADMIN.html on the public site is not something a visitor should
+# find. Excluded here; they stay in the repository and keep working on GitHub.
+exclude:
+  - ADMIN.md
+  - LICENSING.md
+  - PRODUCT.md
+  - README.md
+  - architecture.md
+  - policy.example.json
