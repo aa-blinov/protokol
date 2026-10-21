@@ -33,7 +33,6 @@
         <a href="#install">Install</a>
         <a href="#policy">Administrators</a>
       </nav>
-      <a class="header-github" href="https://github.com/aa-blinov/protokol">GitHub</a>
     </div>
   </header>
 
@@ -191,7 +190,7 @@ docker compose up --build</code></pre>
         </table>
       </div>
 
-      <p class="fine">The file is <code>PROTOKOL_POLICY_FILE</code>, by default <code>/Library/Application Support/Protokol/policy.json</code>. The example is <a href="policy.example.json">policy.example.json</a> and the guide is <a href="ADMIN.md">ADMIN.md</a>.</p>
+      <p class="fine">The file is <code>PROTOKOL_POLICY_FILE</code>, by default <code>/Library/Application Support/Protokol/policy.json</code>. The example is <code>policy.example.json</code> and the guide is <code>ADMIN.md</code>, both in the repository.</p>
 
       <p>Two settings decide what the provider may do with the prompt. <code>LLM_DATA_COLLECTION</code> defaults to <code>deny</code>, which keeps the request away from providers that store prompts or train on them. <code>LLM_ZDR</code> set to <code>1</code> allows only endpoints with a zero data retention policy; some models have none, and the request then fails.</p>
 
@@ -203,12 +202,12 @@ docker compose up --build</code></pre>
   <footer class="site-footer">
     <div class="wrap footer-inner">
       <p>Protokol is MIT licensed. © 2025-2026 Alexander Blinov. Version 0.1.0.</p>
-      <nav class="footer-nav" aria-label="Project links">
-        <a href="https://github.com/aa-blinov/protokol">Source</a>
-        <a href="https://github.com/aa-blinov/protokol#readme">README</a>
-        <a href="https://github.com/aa-blinov/protokol/blob/master/docs/PRODUCT.md">Product</a>
-        <a href="https://github.com/aa-blinov/protokol/blob/master/docs/ADMIN.md">Administrators</a>
-        <a href="https://github.com/aa-blinov/protokol/blob/master/docs/LICENSING.md">Licences</a>
+      <nav class="footer-nav" aria-label="Sections">
+        <a href="#pipeline">Pipeline</a>
+        <a href="#masking">Masking</a>
+        <a href="#screens">The app</a>
+        <a href="#install">Install</a>
+        <a href="#policy">Administrators</a>
       </nav>
     </div>
   </footer>
