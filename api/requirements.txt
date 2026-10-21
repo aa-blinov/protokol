@@ -1,19 +1,19 @@
-fastapi>=0.115
-uvicorn[standard]>=0.32
-pydantic>=2.9
-httpx>=0.27
-python-multipart>=0.0.12
+fastapi>=0.143.3
+uvicorn[standard]>=0.54.0
+pydantic>=2.14.1
+httpx>=0.28.1
+python-multipart>=0.0.32
 
 # Inference: CPU only.
-onnxruntime>=1.20
+onnxruntime>=1.31.0
 onnx-asr[cpu]>=0.12
-transformers>=4.46
-tokenizers>=0.20
-numpy>=1.26,<3
+transformers>=5.20.1
+tokenizers>=0.23.3
+numpy>=2.5.4,<3
 
 # Audio decoding. PyAV embeds the FFmpeg libraries in its wheel, so the decoder
 # is packed into the PyInstaller bundle and no system `ffmpeg` is needed.
-av>=13.0
+av>=19.0.1
 
 # Russian morphology for person names: one identity per person, and the case a
 # name is restored in. The dictionaries ship as a separate package and must be
