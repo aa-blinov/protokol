@@ -9,10 +9,15 @@ import { Button as ButtonSurface } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ChevronDown } from "lucide-react";
 
+// The kit has no filled action button: the word is the button. Emphasis comes
+// from weight and small caps, not from a slab of colour, so a page has exactly
+// one visual temperature no matter how many actions sit on it.
 const BUTTON_SURFACE = {
-  primary: "bg-accent-700 text-white hover:bg-accent-800 hover:text-white",
-  ghost: "border-stone-300 bg-sheet text-stone-800 hover:bg-stone-50 hover:text-stone-800",
-  text: "text-stone-500 hover:bg-transparent hover:text-stone-900",
+  primary:
+    "text-accent-700 font-bold uppercase tracking-widest hover:opacity-70 active:opacity-60",
+  ghost:
+    "text-stone-700 font-normal uppercase tracking-widest hover:text-stone-900",
+  text: "text-stone-500 font-medium hover:text-stone-900",
 } as const;
 
 /** Border, padding and radius for every single-line field.
@@ -23,7 +28,8 @@ const BUTTON_SURFACE = {
  *  is correct on its own. `check_controls.py` fails the build if it drifts
  *  again. Add `pl-`/`pr-` after this for an inset icon; Tailwind emits those
  *  later, so they win. */
-export const FIELD = "focus-ring rounded border border-stone-300 bg-sheet px-3 py-2 leading-5";
+export const FIELD =
+  "rounded border border-stone-300 bg-sheet px-3 py-2 leading-5 transition-colors focus:border-stone-400 focus:outline-none";
 
 export function Button({
   children,
@@ -57,7 +63,7 @@ export function Button({
       aria-label={ariaLabel}
       aria-expanded={ariaExpanded}
       variant="bare"
-      className={`rounded-[6px] ${size === "lg" ? "min-h-12 px-6 text-base" : "min-h-9 px-3"} ${BUTTON_SURFACE[variant]} ${className ?? ""}`}
+      className={`rounded-[6px] ${size === "lg" ? "min-h-11 px-5 text-sm" : "min-h-9 px-3 text-sm"} ${BUTTON_SURFACE[variant]} ${className ?? ""}`}
     >
       {children}
     </ButtonSurface>

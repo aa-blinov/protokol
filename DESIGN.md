@@ -58,7 +58,6 @@ components:
 # Design system: Protokol
 
 ## Overview
-
 **Creative North Star: "The quiet vault"**
 
 Protokol is a private meeting transcriber. The person using it handles other
@@ -70,131 +69,86 @@ shouts undermines it.
 The most important decision is that the result is a document, not a
 dashboard. One column of continuous text, sections separated by hairline
 rules and small monospace labels, like minutes being read rather than three
-floating cards with shields on them. The masking is shown inline, in the
-running text, so the privacy is something the reader reads rather than a
-panel they glance at.
+floating cards with shields on them.
+
+The visual world is the interface kit shipped with Monos: one monospaced
+voice, a 6px corner, hairline borders, and colour that only ever means
+something. The page keeps its composition; what changed underneath it is the
+palette, the face and the shape of every control.
 
 Key characteristics:
 
 - **Document, not cards.** Sections are separated by a 1px rule and a small
   mono label. There are no bordered boxes, no shadows, no accent dots and no
   numbered titles.
-- **Near-monochrome chrome, one accent.** `#1f5a46` marks the single
-  primary action, the progress fill and the focus ring, and nothing else.
+- **One voice.** Everything is set in JetBrains Mono: the transcript, the
+  labels, the numbers, the buttons. A protocol is a machine-made artefact with
+  human text inside it, and the single face says so.
+- **Dark by default.** The app opens in the dark half of the palette. The light
+  half is for daylight and for printing.
+- **No filled action button.** The word is the button: small caps, wide
+  tracking, weight instead of a slab of colour. The only frame on a screen
+  belongs to the chosen state of a toggle.
 - **Colour means personal data.** The only saturated colour on screen is the
-  entity chips. Everything else is warm grey on paper.
-- **Mono for the machine.** Tokens, counts, durations, model ids and
-  timestamps are monospace, and so are the section labels. The prose is the
-  system sans.
-- **Marked and themable.** The brand mark, a page with one line redacted,
-  anchors the header, and the whole surface flips to a dark palette from one
-  control.
+  entity chips; everything else is warm grey.
+- **Marked.** The brand mark is a redacted page drawn in ink, and the whole
+  surface flips between the two halves from one control.
 
 The interface language is Russian. The name on screen is "Протокол".
 
 ## Colors
+Gruvbox, both halves. The neutrals are warm on purpose: a page of text reads as
+paper under a lamp rather than as a screen.
 
-Warm paper and ink with one green accent. The neutrals lean warm so that the
-page reads as a sheet of paper rather than a screen. The accent is the green
-of a ledger stamp, and it is used once per view.
+| Token | Dark (default) | Light | Used for |
+| --- | --- | --- | --- |
+| `paper` | `#282828` | `#fbf1c7` | the page |
+| `sheet` | `#3c3836` | `#f2e5bc` | the app bar, fields, raised surfaces |
+| `ink` | `#ebdbb2` | `#3c3836` | body text, headings |
+| `stone-500` | `#a89984` | `#6a5e53` | meta, labels, secondary text |
+| `stone-200` | `#504945` | `#d5c4a1` | the hairline |
+| `accent-700` | `#83a598` | `#3d7375` | the one action, links, focus ring |
 
-### Dark theme
+Every pair used for text clears 4.5:1 in both halves. `stone-400` and the light
+`accent-700` were raised to reach it; the values above are the measured ones,
+not the palette's raw ones.
 
-The same system on warm charcoal: page `#12110e`, sheet `#1a1915`, text
-`#ece8dc`, hairline `#33312a`. The accent becomes `#2f7a60` for the button
-and the ring, and `#8fd0b3` when it is used as text, so it stays legible on
-the dark sheet. The theme is a `.dark` class on the root element, applied
-before the first paint from a saved preference.
-
-Every chip has a dark counterpart, and so do the search hits, the status
-bands and the focus rules. The dark palette is a restatement, not an
-inversion: the light background `#1d1d1d` is never used in the dark theme.
-
-### Primary
-
-- **Ledger green** (`#1f5a46`): the one accent. The primary button, the
-  progress fill, the focus ring. Its rarity is deliberate.
-- **Ledger green, deeper** (`#184838`): the hover state of the primary
-  button.
-- **Ledger green, deepest** (`#10332a`): the redacted line in the brand mark
-  and the darkest shade of the accent scale.
-
-### Neutral
-
-- **Ink** (`#1d1b16`): the body text and the document title. A warm
-  near-black, not black.
-- **Paper** (`#ece7dc`): the page surface.
-- **Sheet** (`#faf8f3`): the document surface, the field background and the
-  ghost button. The document sits on it.
-- **Stone text** (`#6b6556`): the meta lines, the section labels and the
-  timestamps. It passes 4.5:1 on both the paper and the sheet.
-- **Hairline** (`#e3ded3`): every separator, every section rule and every
-  control border. The separation is done with lines, never with a shadow or a
-  box.
-
-### Destructive
-
-- **Signal red** (`#b91c1c`): the error text and the destructive button.
+**The Colour Means Something Rule.** Red, amber and olive exist only inside the
+entity chips, where they name the kind of personal data. Nothing else on the
+page is allowed to be saturated.
 
 ### Entity chips
 
-The signature colour system. Colour appears here and almost nowhere else.
-The chips are muted and one tone family per entity type, so that they mark
-data without shouting.
-
-| Type | Fill | Border | Text |
-| --- | --- | --- | --- |
-| PERSON | `#e1e8ef` | `#a9bccf` | `#223a57` |
-| ADDRESS | `#e0ece2` | `#a8c7b0` | `#24462f` |
-| PHONE | `#f1e8cf` | `#d3b979` | `#5a4311` |
-| EMAIL | `#e9e4ef` | `#bcaed0` | `#45305f` |
-| Documents | `#f2dfd9` | `#d4a296` | `#6a2a1d` |
-| URL and IP | `#e6e3da` | `#c9c3b2` | `#3b382f` |
-| OTHER | `#efece4` | `#d3cdbd` | `#4a4739` |
-
-The document row covers PASSPORT, INN, SNILS, OMS, CARD, DRIVER_LICENSE,
-MILITARY_ID, BIRTH_CERTIFICATE, OGRNIP and SECRET. OGRNIP is a sole
-proprietor's registration number, and SECRET is a token, an API key or a one
-time code. OTHER also carries the company numbers and the generic numbers.
-
-### Named rules
-
-**The One Accent Rule.** `#1f5a46` marks exactly one thing per view: the
-primary action, the live progress or the focus ring.
-
-**The Colour Means Personal Data Rule.** Saturation signals "this is
-masked". Anything coloured that is not an entity chip is a mistake. The meta
-text is mono stone and the speaker labels are plain mono text.
+A chip is a bordered word on the canvas, not a filled block: 6px corner, a 1px
+border in the tone, the same tone as the text, and the page's own ground. Six
+groups share five tones and a neutral. The chip is the only place on screen
+where a colour other than the accent appears, and it reads as a label rather
+than as a highlight.
 
 ## Typography
-
-**Prose and chrome:** the Segoe UI stack, `"Segoe UI", system-ui,
--apple-system, "Helvetica Neue", Arial, sans-serif`.
-
-**Labels and machine data:** the SF Mono stack, `"SF Mono", "Cascadia Code",
-Consolas, "Liberation Mono", monospace`.
+One face, everywhere: **JetBrains Mono**, bundled in `src/fonts` as three
+weights and served from the page. It is not fetched from a CDN: the app runs
+offline in a desktop window, and a hosted stylesheet would be a network
+dependency at first paint.
 
 ### Hierarchy
 
 - **Document title**: the file name, `text-2xl` at 24px, semibold, tight
   tracking. It is the only large text on the page.
-- **Wordmark**: the product name in the app bar, `text-lg` at 18px,
-  semibold.
-- **Section label**: mono, 12px, uppercase, `0.12em` of tracking, in stone.
-  It names the block: "ТРАНСКРИПТ", "ЧТО УХОДИТ В МОДЕЛЬ", "ОТВЕТ МОДЕЛИ".
-- **Body**: 15px with a line height of 28px, in stone 800, with the measure
-  capped at `68ch`. The transcript, the masked text and the reply all read at
-  this size.
+- **Wordmark**: the product name in the app bar, `text-lg` at 18px, semibold.
+- **Section label**: 12px, uppercase, `0.12em` of tracking, in stone. It names
+  the block: "ВЫЖИМКА", "РАСШИФРОВКА".
+- **Body**: 15px with a line height of 28px, in stone 800, capped at `68ch`.
 - **Meta**: 12px in stone 500, with tabular numerals for the counts and the
-  timestamps. One line under the title carries the date, the duration, the
-  count of personal data and the state of the summary.
+  timestamps.
+- **Action**: 14px uppercase, `0.1em` of tracking, semibold for the primary and
+  regular for the quiet one.
 
 ### Named rules
 
-**The Mono for Machine Rule.** Anything the pipeline produced, a token, a
-count, a duration, a model id or a timestamp, renders in mono. The prose
-never does. The section labels are mono too: the structure of a protocol is
-machine-made scaffolding around human text.
+**The One Voice Rule.** The transcript is mono. A protocol is read for what was
+said and for what was decided, and the numbers, the tokens and the names sit in
+the same column as the sentences; a second face would break the column.
 
 ## Layout
 
@@ -222,28 +176,26 @@ split alone. There are no shadows, no glass and no gradients.
 wrong.
 
 ## Shapes
+Small and utilitarian. One token, `--radius: 6px`, and every corner on the page
+derives from it: fields, chips, buttons, the empty-state frame. There is no
+larger radius anywhere.
 
-Small and utilitarian. The radius scale comes from one token, `--radius` at
-`0.625rem`, and the steps are derived from it: `6px` for the small radius,
-`8px` for the medium, `10px` for the large, then `14px`, `18px`, `22px` and
-`26px`. The controls use `6px`, the chips use `4px`, and the rounded
-rectangles in the interface are gone: the document is a plane, not a stack of
-tiles.
+**The One Corner Rule.** If a corner is not 6px, it is a circle: a status dot,
+nothing else.
 
 ## Components
 
 ### The brand mark
-
-The app bar identity: a page with one line redacted, drawn as an SVG in a
-`32 × 32` box with a `7px` radius, in ledger green, with the page in the
-sheet colour and the redacted line in the deepest accent. It is the app icon
-and the favicon as well, so the product has one face.
+The app bar identity: a page with three lines, drawn as line art in the current
+ink, no fill, inside the same 32 × 32 box the icon used. It replaces the old
+green tile, because the system has no filled brand block: the mark is drawn the
+way every other border on the page is. It is the app icon and the favicon as
+well, so the product has one face.
 
 ### The document header
-
 The file name as the title at 24px, one meta line beneath it, and then quiet
-actions: "Скачать .txt" and "Печать / PDF" outlined, and "Обработать ещё"
-as a text button. There is no badge row and no accent dot.
+actions: "Скачать .txt", "Печать / PDF" and "Развернуть всё", all as words.
+There is no badge row and no accent dot.
 
 ### The empty state
 
@@ -463,8 +415,8 @@ is the exporter.
   document a single column.
 - **Do** spend colour only on the entity chips, and keep everything else
   stone on white or paper.
-- **Do** use mono for the machine data and for the section labels, and keep
-  the prose in the sans face.
+- **Do** set everything in JetBrains Mono, and let the hierarchy come from
+  size and weight.
 - **Do** cap the reading measure at `68ch`.
 - **Do** keep one primary action per view.
 - **Do** state each promise once, in the place where it becomes true.
@@ -475,8 +427,10 @@ is the exporter.
   metadata pills. All three were removed on purpose.
 - **Don't** float the content in bordered cards with headers. That reads as
   a dashboard, not as a protocol.
-- **Don't** colour anything that is not a masked entity.
-- **Don't** put prose in mono, or machine tokens in the sans face.
+- **Don't** colour anything that is not a masked entity, and never fill a
+  chip with it.
+- **Don't** introduce a second face, or a filled action button. The word is
+  the button.
 - **Don't** let the document overflow. At 375px it stacks into one column
   with no horizontal scroll.
 - **Don't** put a shadow anywhere. The rule above is not a preference.

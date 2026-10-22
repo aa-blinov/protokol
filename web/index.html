@@ -11,7 +11,7 @@
     <script>
       // Apply the saved theme before first paint so dark users get no white flash.
       try {
-        if (localStorage.getItem("sttshka.theme") === "dark") document.documentElement.classList.add("dark");
+        if (localStorage.getItem("sttshka.theme") !== "light") document.documentElement.classList.add("dark");
       } catch (e) {}
     </script>
   </head>

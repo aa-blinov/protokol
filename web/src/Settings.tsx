@@ -506,7 +506,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
             </p>
           </>
         ) : (
-          <div className="rounded border border-dashed border-stone-300 px-3 py-4 text-sm text-stone-500">
+          <div className="rounded-[6px] border border-stone-200 px-3 py-4 text-sm text-stone-500">
             Введите адрес и ключ выше и нажмите «Проверить ключ». После проверки появится список моделей.
           </div>
         )}

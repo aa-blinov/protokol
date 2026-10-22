@@ -4,33 +4,69 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Convention mode: an internal tool. Neutral surface, one accent for actions,
-   colour reserved for entity types and state. Fonts are system stacks so the
-   layout never depends on a CDN. */
+/* The face. Bundled, not fetched: the app runs offline in a desktop window, and
+   a hosted stylesheet would be a network dependency at first paint. Mono is not
+   a decoration here — the interface, the transcript and every number share it,
+   which is what makes a page of one meeting read as one document. */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/JetBrainsMono-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/JetBrainsMono-SemiBold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/JetBrainsMono-Bold.woff2") format("woff2");
+}
+
+/* The world is the interface kit: one monospaced voice, a 6px corner, borders of
+   a single weight, and colour that only ever means something. There is no filled
+   action button in it — the word is the button — so these tokens carry surfaces
+   and states rather than chrome.
+
+   Warm neutrals on purpose: Gruvbox's greys are tinted, so a page of text reads
+   as paper under a lamp rather than as a screen. */
 @theme {
-  --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "SF Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
-  /* Paper and ink. Neutrals are warm, so the page reads as paper rather than a
-     screen; the one accent is ledger green, used for the single action. */
-  --color-paper: #ece7dc;
-  --color-sheet: #faf8f3;
-  --color-ink: #1d1b16;
-  --color-stone-50: #f7f5f0;
-  --color-stone-100: #efebe3;
-  --color-stone-200: #e3ded3;
-  --color-stone-300: #cdc6b6;
-  --color-stone-400: #a29b8a;
-  --color-stone-500: #6b6556;
-  --color-stone-600: #565043;
-  --color-stone-700: #443f34;
-  --color-stone-800: #2f2b23;
-  --color-stone-900: #1d1b16;
-  --color-accent-50: #eaf2ee;
-  --color-accent-100: #d6e6dd;
-  --color-accent-300: #8dbba6;
-  --color-accent-700: #1f5a46;
-  --color-accent-800: #184838;
-  --color-accent-900: #10332a;
+  --font-sans: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Geometry, from the kit's tokens.css: identical in every theme. */
+  --ui-radius: 6px;
+  --ui-text-whisper: 0.6875rem;
+
+  /* Gruvbox light. */
+  --color-paper: #fbf1c7;
+  --color-sheet: #f2e5bc;
+  --color-ink: #3c3836;
+  --color-stone-50: #f2e5bc;
+  --color-stone-100: #ebdbb2;
+  --color-stone-200: #d5c4a1;
+  --color-stone-300: #bdae93;
+  --color-stone-400: #72665a;
+  --color-stone-500: #6a5e53;
+  --color-stone-600: #665c54;
+  --color-stone-700: #504945;
+  --color-stone-800: #3c3836;
+  --color-stone-900: #282828;
+  --color-accent-50: #e4ebe6;
+  --color-accent-100: #d6e2dc;
+  --color-accent-300: #7ba39a;
+  --color-accent-700: #3d7375;
+  --color-accent-800: #2f6163;
+  --color-accent-900: #24514f;
 }
 
 html,
@@ -44,24 +80,47 @@ body {
   background: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-variant-ligatures: none;
+  caret-color: var(--color-accent-700);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Placeholder chips in the masked text. Colour maps to entity type. */
+/* Entity chips. The kit draws a chip as a bordered word on the canvas, not a
+   filled block, so type is carried by the border and the text and the ground
+   stays the page. Six groups, five tones and a neutral — colour that means
+   something is not colour that decorates. */
 .chip {
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  padding: 0.05rem 0.35rem;
-  border-radius: 0.25rem;
-  border: 1px solid transparent;
-  white-space: nowrap;
+  font-size: 0.75rem;
   font-weight: 600;
+  padding: 0.05rem 0.3rem;
+  border-radius: var(--ui-radius);
+  border: 1px solid currentColor;
+  background: var(--color-stone-50);
+  color: var(--color-stone-700);
+  white-space: nowrap;
 }
 
-.chip-PERSON { background: #e1e8ef; border-color: #a9bccf; color: #223a57; }
-.chip-ADDRESS { background: #e0ece2; border-color: #a8c7b0; color: #24462f; }
-.chip-PHONE { background: #f1e8cf; border-color: #d3b979; color: #5a4311; }
-.chip-EMAIL { background: #e9e4ef; border-color: #bcaed0; color: #45305f; }
+.chip-PERSON,
+.chip-EMAIL {
+  border-color: #8fb6ae;
+  color: #2c5658;
+  background: #e6efea;
+}
+
+.chip-ADDRESS {
+  border-color: #9aa86a;
+  color: #4f5a26;
+  background: #eef0d8;
+}
+
+.chip-PHONE {
+  border-color: #c39a52;
+  color: #6b4a10;
+  background: #f6ecd2;
+}
+
 .chip-PASSPORT,
 .chip-INN,
 .chip-SNILS,
@@ -71,25 +130,34 @@ body {
 .chip-MILITARY_ID,
 .chip-BIRTH_CERTIFICATE,
 .chip-OGRNIP,
-.chip-SECRET { background: #f2dfd9; border-color: #d4a296; color: #6a2a1d; }
+.chip-SECRET {
+  border-color: #cc241d;
+  color: #9d1f1a;
+  background: #f6ddd8;
+}
+
 .chip-URL,
-.chip-IP { background: #e6e3da; border-color: #c9c3b2; color: #3b382f; }
-.chip-OTHER { background: #efece4; border-color: #d3cdbd; color: #4a4739; }
+.chip-IP,
+.chip-OTHER {
+  border-color: var(--color-stone-300);
+  color: var(--color-stone-700);
+  background: var(--color-stone-50);
+}
 
 /* Search hits in the transcript. Amber for every match, a hard outline on the
    one currently being looked at -- a transcript is several screens long, and
    "which of these forty is this" needs to be answerable without counting. */
 .hit {
-  background: #fef08a;
+  background: #f7e7a8;
   color: inherit;
   border-radius: 2px;
 }
 
 .hit-current {
-  background: #f59e0b;
-  color: #1c1917;
+  background: #d79921;
+  color: #282828;
   border-radius: 2px;
-  box-shadow: 0 0 0 2px #b45309;
+  box-shadow: 0 0 0 2px #af3a03;
 }
 
 .focus-ring:focus-visible {
@@ -151,77 +219,102 @@ body {
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Light half of the palette. The app opens dark; this is the toggle's other side. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --radius: 6px;
+  --background: #fbf1c7;
+  --foreground: #3c3836;
+  --card: #f2e5bc;
+  --card-foreground: #3c3836;
+  --popover: #f2e5bc;
+  --popover-foreground: #3c3836;
   /* The one accent. Shadcn's primary, the focus ring and the progress fill all
-     read these, so they carry the same ledger green as the button. */
-  --primary: #1f5a46;
-  --primary-foreground: #ffffff;
-  --color-primary: #1f5a46;
-  --color-primary-foreground: #ffffff;
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: #1f5a46;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+     read these, so they carry the kit's slate blue. */
+  --primary: #458588;
+  --primary-foreground: #fbf1c7;
+  --color-primary: #458588;
+  --color-primary-foreground: #fbf1c7;
+  --secondary: #ebdbb2;
+  --secondary-foreground: #3c3836;
+  --muted: #ebdbb2;
+  --muted-foreground: #7c6f64;
+  --accent: #ebdbb2;
+  --accent-foreground: #282828;
+  --destructive: #cc241d;
+  --border: #d5c4a1;
+  --input: #d5c4a1;
+  --ring: #504945;
+  --chart-1: #458588;
+  --chart-2: #98971a;
+  --chart-3: #d79921;
+  --chart-4: #cc241d;
+  --chart-5: #b16286;
+  --sidebar: #f2e5bc;
+  --sidebar-foreground: #3c3836;
+  --sidebar-primary: #458588;
+  --sidebar-primary-foreground: #fbf1c7;
+  --sidebar-accent: #ebdbb2;
+  --sidebar-accent-foreground: #282828;
+  --sidebar-border: #d5c4a1;
+  --sidebar-ring: #504945;
 }
 
+/* Dark half, and the default. Warm greys, not neutral: #282828 with #ebdbb2 on
+   it reads as lamplight on paper rather than as a screen at night. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --color-paper: #282828;
+  --color-sheet: #3c3836;
+  --color-ink: #ebdbb2;
+  --color-stone-50: #32302f;
+  --color-stone-100: #3c3836;
+  --color-stone-200: #504945;
+  --color-stone-300: #665c54;
+  --color-stone-400: #9a8c7e;
+  --color-stone-500: #a89984;
+  --color-stone-600: #bdae93;
+  --color-stone-700: #d5c4a1;
+  --color-stone-800: #ebdbb2;
+  --color-stone-900: #fbf1c7;
+  --color-accent-50: #2f3a38;
+  --color-accent-100: #3a4a46;
+  --color-accent-300: #5f8b84;
+  --color-accent-700: #83a598;
+  --color-accent-800: #a3c1b5;
+  --color-accent-900: #c3d9cf;
+  --accent-ink: #83a598;
+  --background: #282828;
+  --foreground: #ebdbb2;
+  --card: #32302f;
+  --card-foreground: #ebdbb2;
+  --popover: #32302f;
+  --popover-foreground: #ebdbb2;
+  --primary: #83a598;
+  --primary-foreground: #282828;
+  --color-primary: #83a598;
+  --color-primary-foreground: #282828;
+  --secondary: #3c3836;
+  --secondary-foreground: #ebdbb2;
+  --muted: #3c3836;
+  --muted-foreground: #a89984;
+  --accent: #3c3836;
+  --accent-foreground: #fbf1c7;
+  --destructive: #fb4934;
+  --border: #504945;
+  --input: #504945;
+  --ring: #bdae93;
+  --chart-1: #83a598;
+  --chart-2: #b8bb26;
+  --chart-3: #d79921;
+  --chart-4: #fb4934;
+  --chart-5: #d3869b;
+  --sidebar: #32302f;
+  --sidebar-foreground: #ebdbb2;
+  --sidebar-primary: #83a598;
+  --sidebar-primary-foreground: #282828;
+  --sidebar-accent: #3c3836;
+  --sidebar-accent-foreground: #fbf1c7;
+  --sidebar-border: #504945;
+  --sidebar-ring: #bdae93;
 }
 
 @layer base {
@@ -253,57 +346,30 @@ body {
   }
 }
 
-/* Dark theme. Every stone and accent utility reads its colour from these
-   variables, so redefining them here re-colours text, borders and fills at once.
-   Only the semantic reds and ambers, the chips and a few focus rules need rules. */
 :root {
   color-scheme: light;
 }
 
 .dark {
   color-scheme: dark;
-  --color-paper: #12110e;
-  --color-sheet: #1a1915;
-  --color-ink: #ece8dc;
-  --color-stone-50: #1f1e19;
-  --color-stone-100: #272620;
-  --color-stone-200: #33312a;
-  --color-stone-300: #4a463c;
-  --color-stone-400: #6e6a5d;
-  --color-stone-500: #a7a291;
-  --color-stone-600: #c4bfae;
-  --color-stone-700: #d5d0c0;
-  --color-stone-800: #e6e2d5;
-  --color-stone-900: #f4f1e8;
-  --color-accent-50: #1c2d27;
-  --color-accent-100: #24392f;
-  --color-accent-300: #2f6652;
-  --color-accent-700: #2f7a60;
-  --color-accent-800: #3f8a70;
-  --color-accent-900: #b9ded0;
-  --accent-ink: #8fd0b3;
-  --primary: #2f7a60;
-  --color-primary: #2f7a60;
-  --ring: #3f8a70;
-  --color-ring: #3f8a70;
 }
 
 /* Accent used as text reads too dark on the dark sheet, so it lifts. */
 .dark .text-accent-700 { color: var(--accent-ink); }
 .dark .text-accent-800 { color: var(--accent-ink); }
-.dark .ring-accent-300 { --tw-ring-color: #2f6652; }
-.dark .bg-red-50 { background-color: #3b1d1d; }
-.dark .bg-amber-50 { background-color: #3a2c12; }
-.dark .text-red-700 { color: #fca5a5; }
-.dark .text-red-800 { color: #fecaca; }
-.dark .text-red-900 { color: #fee2e2; }
-.dark .text-amber-700 { color: #fcd34d; }
-.dark .text-amber-800 { color: #fde68a; }
-.dark .text-amber-900 { color: #fef3c7; }
-.dark .border-red-400 { border-color: #7f1d1d; }
-.dark .border-amber-400 { border-color: #78350f; }
-.dark .hit { background: #713f12; color: #fef9c3; }
-.dark .hit-current { background: #f59e0b; color: #1c1917; }
+.dark .ring-accent-300 { --tw-ring-color: #5f8b84; }
+.dark .bg-red-50 { background-color: #3c2a28; }
+.dark .bg-amber-50 { background-color: #3a2f22; }
+.dark .text-red-700 { color: #fb8f7e; }
+.dark .text-red-800 { color: #ffb3a6; }
+.dark .text-red-900 { color: #ffd0c7; }
+.dark .text-amber-700 { color: #e8b473; }
+.dark .text-amber-800 { color: #f0c48e; }
+.dark .text-amber-900 { color: #f6d6ad; }
+.dark .border-red-400 { border-color: #94524a; }
+.dark .border-amber-400 { border-color: #8a6a36; }
+.dark .hit { background: #4a4020; color: #fbf1c7; }
+.dark .hit-current { background: #d79921; color: #282828; }
 
 /* Focus on a bordered field must still show in dark mode. These sit outside the
    Tailwind layers, so they win the same cascade fight as the rules above. */
@@ -311,10 +377,10 @@ body {
 .dark .border-stone-300:focus,
 .dark .border-stone-400:focus { border-color: var(--accent-ink); }
 
-.dark .chip-PERSON { background: #1f2d3d; border-color: #34506e; color: #c9dbee; }
-.dark .chip-ADDRESS { background: #1d2e22; border-color: #3a5c42; color: #c6e4cd; }
-.dark .chip-PHONE { background: #3a2e14; border-color: #6d5524; color: #f1dfa9; }
-.dark .chip-EMAIL { background: #2c2338; border-color: #4f3f6b; color: #dcd0ef; }
+.dark .chip-PERSON,
+.dark .chip-EMAIL { background: #2f3a38; border-color: #5f8b84; color: #a3c1b5; }
+.dark .chip-ADDRESS { background: #303328; border-color: #6a7a3f; color: #c6c98a; }
+.dark .chip-PHONE { background: #3a2f22; border-color: #8a6a36; color: #e8b473; }
 .dark .chip-PASSPORT,
 .dark .chip-INN,
 .dark .chip-SNILS,
@@ -324,10 +390,10 @@ body {
 .dark .chip-MILITARY_ID,
 .dark .chip-BIRTH_CERTIFICATE,
 .dark .chip-OGRNIP,
-.dark .chip-SECRET { background: #3c201b; border-color: #6b3a30; color: #f2cdc5; }
+.dark .chip-SECRET { background: #3c2a28; border-color: #94524a; color: #fb8f7e; }
 .dark .chip-URL,
-.dark .chip-IP { background: #2c2a24; border-color: #4a4739; color: #dcd8cb; }
-.dark .chip-OTHER { background: #222019; border-color: #3f3c33; color: #c9c4b5; }
+.dark .chip-IP,
+.dark .chip-OTHER { background: #32302f; border-color: #504945; color: #bdae93; }
 
 /* The history rail stays in view while a long document scrolls. Desktop only: below lg the rail
    sits under the document, and pinning it there would cover the document. The top is the header's
@@ -372,25 +438,25 @@ body {
 
 /* Selection. Ink goes dark on the accent rather than light on dark, so the
    copied text stays readable whichever way the user swipes. */
-::selection { background: #cfe3d8; color: #1d1b16; }
-.dark ::selection { background: #2c5a4a; color: #e6f0eb; }
+::selection { background: #cddcd5; color: #282828; }
+.dark ::selection { background: #3f5a52; color: #fbf1c7; }
 
 /* Scrollbars. WebKit needs the pseudo-elements; Firefox takes the standard
    pair. Thumb only — a full track would draw a second frame around every
    scrollable box the interface already frames with a hairline. */
-* { scrollbar-width: thin; scrollbar-color: #cdc6b6 transparent; }
-.dark * { scrollbar-color: #4a463c transparent; }
+* { scrollbar-width: thin; scrollbar-color: #d5c4a1 transparent; }
+.dark * { scrollbar-color: #504945 transparent; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background-color: #cdc6b6;
+  background-color: #d5c4a1;
   border: 3px solid transparent;
   border-radius: 9999px;
   background-clip: content-box;
 }
-.dark ::-webkit-scrollbar-thumb { background-color: #4a463c; }
-::-webkit-scrollbar-thumb:hover { background-color: #a29b8a; }
-.dark ::-webkit-scrollbar-thumb:hover { background-color: #6e6a5d; }
+.dark ::-webkit-scrollbar-thumb { background-color: #504945; }
+::-webkit-scrollbar-thumb:hover { background-color: #a89984; }
+.dark ::-webkit-scrollbar-thumb:hover { background-color: #665c54; }
 
 /* Underlines. Default offset puts the line through the descenders of «ц»,
    «й» and «р», which in this typeface reads as a strike. */
@@ -398,8 +464,8 @@ a, button, .focus-ring { text-underline-offset: 0.18em; }
 a { text-decoration-thickness: from-font; }
 
 /* Caret. Same accent as the focus ring, so typing looks like it belongs. */
-:root { caret-color: #1f5a46; }
-.dark { caret-color: #8fd0b3; }
+:root { caret-color: #3d7375; }
+.dark { caret-color: #83a598; }
 
 /* --------------------------------------------------------------- zoom & text
 

@@ -100,12 +100,21 @@ function downloadText(filename: string, text: string): void {
 /** The product mark: a page with one line redacted. Same shape as the app icon and favicon. */
 function Mark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={className} role="img" aria-label={PRODUCT_NAME}>
-      <rect width="32" height="32" rx="7" fill="#1f5a46" />
-      <rect x="8" y="6" width="16" height="20" rx="2" fill="#faf8f3" />
-      <rect x="11" y="11" width="10" height="2" rx="1" fill="#a29b8a" />
-      <rect x="11" y="15" width="7" height="2" rx="1" fill="#a29b8a" />
-      <rect x="11" y="19" width="10" height="3" rx="0.5" fill="#10332a" />
+    // Drawn in the current ink rather than set in a colour: the kit has no
+    // filled brand block, and a sheet of paper is a better mark for a protocol
+    // than a coloured tile is.
+    <svg
+      viewBox="0 0 32 32"
+      className={className}
+      role="img"
+      aria-label={PRODUCT_NAME}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="7" y="4" width="18" height="24" rx="5" strokeWidth="2" />
+      <path d="M11 11h10M11 16h10M11 21h6" strokeWidth="2" />
     </svg>
   );
 }
@@ -358,11 +367,14 @@ function Document({
                   aria-current={active}
                   title={done ? undefined : "Выжимка в этом режиме ещё не составлена"}
                   className={
+                    // The kit's toggle: the chosen state is the only frame. An
+                    // unchosen mode is a word, and a mode without a summary is
+                    // the same word in a quieter ink rather than a dashed box.
                     active
-                      ? "focus-ring rounded-full border border-accent-700 bg-accent-50 px-3 py-1 text-xs text-accent-800"
+                      ? "focus-ring rounded-[6px] border border-accent-700 bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-800"
                       : done
-                        ? "focus-ring rounded-full border border-stone-300 px-3 py-1 text-xs text-stone-600 hover:bg-stone-50"
-                        : "focus-ring rounded-full border border-dashed border-stone-300 px-3 py-1 text-xs text-stone-500 hover:bg-stone-50"
+                        ? "focus-ring rounded-[6px] border border-transparent px-3 py-1 text-xs text-stone-700 hover:text-stone-900"
+                        : "focus-ring rounded-[6px] border border-transparent px-3 py-1 text-xs text-stone-500 hover:text-stone-900"
                   }
                 >
                   {item.label}
@@ -546,7 +558,7 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">(() =>
-    localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light",
+    localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark",
   );
   const inputRef = useRef<HTMLInputElement>(null);
   // The bar under the header sticks at the header's bottom edge. The edge is measured, not
@@ -1110,7 +1122,7 @@ export default function App() {
           ) : null}
 
           {!settingsOpen && view === "empty" && !error && busy !== "analysing" ? (
-            <div className="no-print flex min-h-[380px] flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 px-6 py-12 text-center">
+            <div className="no-print flex min-h-[380px] flex-col items-center justify-center rounded-[6px] border border-stone-200 px-6 py-12 text-center">
               <Mark className="h-10 w-10" />
               <h2 className="mt-4 max-w-sm text-lg font-semibold tracking-tight text-stone-900">
                 Загрузите запись встречи
@@ -1134,7 +1146,7 @@ export default function App() {
           ) : null}
 
           {!settingsOpen && view === "empty" && busy === "analysing" ? (
-            <div className="no-print flex min-h-[380px] flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 px-6 py-12 text-center">
+            <div className="no-print flex min-h-[380px] flex-col items-center justify-center rounded-[6px] border border-stone-200 px-6 py-12 text-center">
               <Mark className="h-10 w-10" />
               <h2 className="mt-4 max-w-sm text-lg font-semibold tracking-tight text-stone-900">
                 Обрабатываем запись
