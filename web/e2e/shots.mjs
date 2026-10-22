@@ -48,6 +48,9 @@ async function capture(browser, base) {
   const context = await browser.newContext(desktop);
   const page = await context.newPage();
   await page.goto(`${base}/`, { waitUntil: 'networkidle' });
+  // The app opens dark. The first set of shots is the light one, so it is
+  // switched explicitly rather than assumed.
+  await setTheme(page, false);
   await save(page, 'app-empty.png');
 
   const put = await fetch(`${base}/api/sessions`, {

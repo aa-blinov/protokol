@@ -6,7 +6,8 @@
 
 web
 
-The interface is a React application. It ships as a native desktop app for macOS on Apple Silicon, with Linux as the second target, and it also runs as a web deployment behind nginx in Docker. The desktop app is one process tree: an Electron window loads a page from a Python sidecar that serves both the interface and the API from one origin on `127.0.0.1`.
+The interface is a Svelte application, and it is built on the shared
+interface kit `@monos/ui` rather than on components of its own. It ships as a native desktop app for macOS on Apple Silicon, with Linux as the second target, and it also runs as a web deployment behind nginx in Docker. The desktop app is one process tree: an Electron window loads a page from a Python sidecar that serves both the interface and the API from one origin on `127.0.0.1`.
 
 ## Users
 

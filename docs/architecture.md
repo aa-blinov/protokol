@@ -32,7 +32,7 @@ in a container of its own.
 | `api/analysis_cache.py` | The eight cached analyses and the digest that keys them. |
 | `api/storage.py` | The files written 0600, and the FileVault check. |
 | `api/config.py`, `api/schemas.py` | The environment with its defaults, and the request and response models. |
-| `web/src/` | The React interface. `App.tsx` holds the shell and the document, `Review.tsx` the pre-send screen, `Transcript.tsx` the transcript and the search, `ui.tsx` the app's own primitives. |
+| `web/src/` | The Svelte interface. `App.svelte` holds the shell and the document, `Review.svelte` the pre-send screen, `Transcript.svelte` the transcript and the search, `components/` the app's own primitives. The kit comes from `@monos/ui`; the app adds only what the kit does not cover. |
 | `web/e2e/` | The browser checks against a stub provider, and the screenshot script. |
 | `desktop/main.js` | The shell: a free port, the sidecar and the window. |
 | `desktop/build.sh`, `desktop/verify.sh` | The bundle for this platform, and the check that runs on it. |
