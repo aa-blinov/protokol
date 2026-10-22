@@ -1,22 +1,28 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="gruvbox" data-mode="dark">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231f5a46'/%3E%3Crect x='8' y='6' width='16' height='20' rx='2' fill='%23faf8f3'/%3E%3Crect x='11' y='11' width='10' height='2' rx='1' fill='%23a29b8a'/%3E%3Crect x='11' y='15' width='7' height='2' rx='1' fill='%23a29b8a'/%3E%3Crect x='11' y='19' width='10' height='3' rx='0.5' fill='%2310332a'/%3E%3C/svg%3E"
-    />
+    <meta name="color-scheme" content="dark light" />
     <title>Протокол</title>
     <script>
-      // Apply the saved theme before first paint so dark users get no white flash.
-      try {
-        if (localStorage.getItem("sttshka.theme") === "dark") document.documentElement.classList.add("dark");
-      } catch (e) {}
+      // The theme is applied before the first paint so that a dark user never
+      // sees a white flash. The dark half is the default; the light half is
+      // the one that has to be asked for.
+      (function () {
+        try {
+          var saved = localStorage.getItem("sttshka.theme");
+          var mode = saved === "light" ? "light" : "dark";
+          document.documentElement.setAttribute("data-mode", mode);
+        } catch (error) {
+          document.documentElement.setAttribute("data-mode", "dark");
+        }
+      })();
     </script>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
