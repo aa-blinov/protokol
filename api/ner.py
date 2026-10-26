@@ -126,9 +126,7 @@ class PiiNer:
         model_config = json.loads((self.model_dir / "config.json").read_text(encoding="utf-8"))
         self.id2label = {int(k): v for k, v in model_config["id2label"].items()}
 
-        options = ort.SessionOptions()
-        options.intra_op_num_threads = threads
-        options.inter_op_num_threads = 1
+        options = config.session_options(threads)
         self.providers = config.ort_providers()
         self.session = ort.InferenceSession(str(model_path), options, providers=self.providers)
         self.active_provider = self.session.get_providers()[0]

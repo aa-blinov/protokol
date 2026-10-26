@@ -63,11 +63,7 @@ class Stt:
         self.model_dir = Path(model_dir)
         if not (self.model_dir / "config.json").is_file():
             raise FileNotFoundError(f"Missing model artifacts in {self.model_dir}")
-        import onnxruntime as ort
-
-        options = ort.SessionOptions()
-        options.intra_op_num_threads = threads
-        options.inter_op_num_threads = 1
+        options = config.session_options(threads)
         self.model = onnx_asr.load_model(
             MODEL_NAME,
             path=self.model_dir,
@@ -109,27 +105,34 @@ class Stt:
         return " ".join(text for text in texts if text)
 
     def transcribe_words(self, samples: np.ndarray) -> list[Word]:
-        """Recognize the whole audio once and return words with their times.
+        """Recognize the whole audio and return its words with their times.
 
-        One pass keeps the model's own context across speaker turns; the caller
-        then assigns each word to the speaker turn it falls in. Long audio is
-        still split at quiet frames, and each chunk's times are shifted to the
-        whole recording.
+        Each chunk is recognised on its own; the caller then assigns each word to
+        the speaker turn it falls in. The analysis uses the chunk methods directly,
+        so that it can report progress between chunks.
         """
         words: list[Word] = []
         offset = 0.0
-        with tempfile.TemporaryDirectory() as tmp:
-            for index, chunk in enumerate(self._split_long(samples)):
-                wav_path = Path(tmp) / f"words{index}.wav"
-                self._write_wav(chunk, wav_path)
-                result = self._timestamps.recognize(str(wav_path))
-                times = self._char_times(result.tokens, result.timestamps, result.text)
-                words.extend(
-                    Word(word.text, word.start + offset, word.end + offset)
-                    for word in words_from_timed_text(result.text, times)
-                )
-                offset += len(chunk) / TARGET_SAMPLE_RATE
+        for chunk in self.word_chunks(samples):
+            words.extend(self.words_in_chunk(chunk, offset))
+            offset += len(chunk) / TARGET_SAMPLE_RATE
         return words
+
+    def word_chunks(self, samples: np.ndarray) -> list[np.ndarray]:
+        """The pieces the word pass runs over, in order. Long audio is split at quiet frames."""
+        return self._split_long(samples)
+
+    def words_in_chunk(self, chunk: np.ndarray, offset: float) -> list[Word]:
+        """Words of one piece of audio, with their times moved ``offset`` seconds into the recording."""
+        with tempfile.TemporaryDirectory() as tmp:
+            wav_path = Path(tmp) / "words.wav"
+            self._write_wav(chunk, wav_path)
+            result = self._timestamps.recognize(str(wav_path))
+        times = self._char_times(result.tokens, result.timestamps, result.text)
+        return [
+            Word(word.text, word.start + offset, word.end + offset)
+            for word in words_from_timed_text(result.text, times)
+        ]
 
     @staticmethod
     def _char_times(tokens: list[str], timestamps: list[float] | None, text: str) -> list[float]:

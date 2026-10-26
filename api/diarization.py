@@ -281,13 +281,14 @@ class Diarizer:
         # pyannote segmentation: loaded through onnx_asr so its powerset decoding
         # (and the window re-ordering that keeps local speaker order stable) is
         # the same code the library ships and tests.
+        options = config.session_options(threads)
         self._vad = onnx_asr.load_vad(
-            "onnx-community/pyannote-segmentation-3.0", path=self.segmentation_dir, providers=providers
+            "onnx-community/pyannote-segmentation-3.0",
+            path=self.segmentation_dir,
+            sess_options=options,
+            providers=providers,
         )
         self._fbank = KaldiPreprocessorNumpy("wespeaker")
-        options = ort.SessionOptions()
-        options.intra_op_num_threads = threads
-        options.inter_op_num_threads = 1
         self._embedding = ort.InferenceSession(str(self.embedding_path), options, providers=providers)
         self._lock = Lock()
 
