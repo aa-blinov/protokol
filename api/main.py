@@ -58,7 +58,10 @@ def get_stt() -> Stt:
                 try:
                     _stt = Stt(config.GIGAAM_DIR, threads=config.INFERENCE_THREADS)
                 except FileNotFoundError as error:
-                    raise HTTPException(503, f"STT model unavailable: {error}") from error
+                    log.error("speech model unavailable: %s", error)
+                    raise HTTPException(
+                        503, "Не найдена модель распознавания речи. Переустановите приложение."
+                    ) from error
     return _stt
 
 
@@ -70,7 +73,10 @@ def get_ner() -> PiiNer:
                 try:
                     _ner = PiiNer(config.PII_NER_DIR, threads=config.INFERENCE_THREADS)
                 except FileNotFoundError as error:
-                    raise HTTPException(503, f"PII model unavailable: {error}") from error
+                    log.error("PII model unavailable: %s", error)
+                    raise HTTPException(
+                        503, "Не найдена модель поиска персональных данных. Переустановите приложение."
+                    ) from error
     return _ner
 
 
@@ -443,9 +449,21 @@ def _analyse(audio: bytes, suffix: str):
         # needs a duration under that name.
         timings["diarize"] = round(time.perf_counter() - diarize_started, 2)
         if len({turn.speaker for turn in turns}) > 1:
-            # One pass over the whole audio (the model keeps its own context),
-            # then each word is assigned to the speaker turn it falls in.
-            words = stt.transcribe_words(samples)
+            # Recognised piece by piece, so the progress line keeps moving through
+            # the longest stage of the run; then each word goes to the turn it falls in.
+            words = []
+            offset = 0.0
+            chunks = stt.word_chunks(samples)
+            yield ("words", 20, "Распознавание речи", None)
+            for number, chunk in enumerate(chunks, start=1):
+                words.extend(stt.words_in_chunk(chunk, offset))
+                offset += len(chunk) / TARGET_SAMPLE_RATE
+                yield (
+                    "words",
+                    20 + round(25 * number / len(chunks)),
+                    f"Распознавание речи: фрагмент {number} из {len(chunks)}",
+                    None,
+                )
             attributed = assign_words_to_turns(
                 words, [(turn.speaker, turn.start, turn.end) for turn in turns]
             )

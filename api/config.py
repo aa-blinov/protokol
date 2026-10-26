@@ -87,3 +87,21 @@ def ort_providers() -> list[str]:
     if USE_COREML and IS_MAC_ARM:
         return ["CoreMLExecutionProvider", "CPUExecutionProvider"]
     return ["CPUExecutionProvider"]
+
+
+def session_options(threads: int = INFERENCE_THREADS):
+    """onnxruntime options for every model in the sidecar, so they share one policy.
+
+    The thread count is set on each session. The diarizer's segmentation model used
+    to be created without options, which left it on onnxruntime's default thread
+    count and out of reach of INFERENCE_THREADS. Spinning is off: between the many
+    small calls of the speech decoder an idle thread pool busy-waits, and on a
+    20-minute recording that cost about a sixth of the CPU time with the same output.
+    """
+    import onnxruntime as ort
+
+    options = ort.SessionOptions()
+    options.intra_op_num_threads = threads
+    options.inter_op_num_threads = 1
+    options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+    return options

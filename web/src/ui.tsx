@@ -4,7 +4,7 @@
  *  separated by hairline rules and small monospace labels rather than floated,
  *  bordered cards. The library still supplies Button/Progress behaviour. */
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Button as ButtonSurface } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { ChevronDown } from "lucide-react";
@@ -390,16 +390,19 @@ export function ProgressBar({
   pct,
   message,
   eta,
-  elapsed,
+  startedAt,
 }: {
   pct: number;
   message: string;
   /** Seconds left in this stage, from how long it took last time. Null on the
    *  first recording of a session, when nothing has been measured yet. */
   eta?: number | null;
-  /** Seconds since the work started. Always known, unlike eta. */
-  elapsed?: number;
+  /** When the work started, in milliseconds since the epoch. The clock ticks in
+   *  here rather than in the parent: a timer in the parent re-rendered the whole
+   *  screen every second for the length of a recording. */
+  startedAt?: number | null;
 }) {
+  const elapsed = useElapsedSeconds(startedAt);
   return (
     // Full width, deliberately: the bar sat at max-w-md, 448px against a drop
     // zone nearly twice that, and a progress indicator that stops two-thirds
@@ -425,6 +428,22 @@ export function ProgressBar({
       <Progress value={pct} aria-label={message} className="h-1.5 rounded-full bg-stone-300" />
     </div>
   );
+}
+
+/** Whole seconds since `startedAt`, refreshed once a second while it is set. */
+function useElapsedSeconds(startedAt?: number | null): number {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    if (!startedAt) {
+      setSeconds(0);
+      return;
+    }
+    const tick = () => setSeconds(Math.round((Date.now() - startedAt) / 1000));
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [startedAt]);
+  return seconds;
 }
 
 /** "12 с", "1 мин 10 с" -- short enough for a progress line. */

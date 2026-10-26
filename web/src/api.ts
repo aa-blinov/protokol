@@ -47,7 +47,7 @@ export interface AnalysisResult {
 }
 
 export interface AnalysisProgress {
-  stage: "transcribe" | "diarize" | "mask" | "done" | "error";
+  stage: "transcribe" | "diarize" | "words" | "mask" | "done" | "error";
   pct: number;
   message: string;
   result?: AnalysisResult;

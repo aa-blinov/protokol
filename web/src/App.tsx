@@ -534,7 +534,6 @@ export default function App() {
    *  comes from this machine's own earlier runs rather than a guess. */
   const stageTimings = useRef<Record<string, number>>({});
   const [eta, setEta] = useState<number | null>(null);
-  const [elapsed, setElapsed] = useState(0);
   /** Row awaiting a delete confirmation. Removing a transcript is destructive
    *  and cannot be undone, so it takes a second, deliberate click. */
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -569,18 +568,11 @@ export default function App() {
   }, [view]);
   const listRef = useRef<HTMLUListElement>(null);
 
-  // A ticking clock for the current run. Ticks once a second, which is also
-  // the resolution any human reading "прошло 43 с" cares about.
+  // When the current run started. The clock that shows it ticks inside ProgressBar,
+  // so the rest of the screen does not re-render once a second.
+  const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
   useEffect(() => {
-    if (busy === "none") {
-      setElapsed(0);
-      return;
-    }
-    const started = Date.now();
-    const tick = () => setElapsed(Math.round((Date.now() - started) / 1000));
-    tick();
-    const id = window.setInterval(tick, 1000);
-    return () => window.clearInterval(id);
+    setRunStartedAt(busy === "none" ? null : Date.now());
   }, [busy]);
 
   useEffect(() => {
@@ -764,7 +756,13 @@ export default function App() {
   const notice = useCallback(
     (tone: Notice["tone"], text: string) => {
       const id = crypto.randomUUID();
-      setNotices((previous) => [...previous, { id, tone, text }]);
+      // The same message twice is one toast: a repeated click on a failing button
+      // must not stack identical boxes at the bottom of the screen.
+      setNotices((previous) =>
+        previous.some((item) => item.tone === tone && item.text === text)
+          ? previous
+          : [...previous, { id, tone, text }],
+      );
       // Errors stay until dismissed: a failure that quietly disappears is the
       // same failure the person could not find in the first place.
       if (tone === "good") window.setTimeout(() => dismissNotice(id), 5000);
@@ -1083,7 +1081,7 @@ export default function App() {
 
           {!settingsOpen && busy && progress ? (
             <div>
-              <ProgressBar pct={progress.pct} message={progress.message} eta={eta} elapsed={elapsed} />
+              <ProgressBar pct={progress.pct} message={progress.message} eta={eta} startedAt={runStartedAt} />
               {/* Only when a document is behind the bar. On a fresh run the
                   working panel below already names the file. */}
               {workingOn && view !== "empty" ? (
@@ -1097,7 +1095,7 @@ export default function App() {
               transcription line, which would name the wrong thing. */}
           {!settingsOpen && busy === "summarising" ? (
             <div>
-              <ProgressBar pct={70} message="Модель читает текст и пишет выжимку" elapsed={elapsed} />
+              <ProgressBar pct={70} message="Модель читает текст и пишет выжимку" startedAt={runStartedAt} />
               {workingOn ? <p className="mt-1 truncate font-mono text-[12px] text-stone-600">{workingOn}</p> : null}
             </div>
           ) : null}

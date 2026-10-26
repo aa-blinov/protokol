@@ -60,6 +60,15 @@ class FakeStt:
         step = 8.0 / max(len(parts), 1)
         return [Word(part, i * step, i * step + step * 0.8) for i, part in enumerate(parts)]
 
+    def word_chunks(self, samples):
+        return [samples]
+
+    def words_in_chunk(self, chunk, offset):
+        FakeStt.calls += 1
+        parts = FakeStt.text.split()
+        step = 8.0 / max(len(parts), 1)
+        return [Word(part, offset + i * step, offset + i * step + step * 0.8) for i, part in enumerate(parts)]
+
 
 class FakeNer:
     def predict(self, text):
