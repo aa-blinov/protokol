@@ -25,8 +25,7 @@
     "files": ["main.js"],
     "extraResources": [
       { "from": "../api/dist/sttshka-api", "to": "sidecar/sttshka-api", "filter": ["**/*"] },
-      { "from": "../web/dist", "to": "web", "filter": ["**/*"] },
-      { "from": "../models", "to": "models", "filter": ["**/*", "!**/__pycache__/**", "!**/*.pyc"] }
+      { "from": "../web/dist", "to": "web", "filter": ["**/*"] }
     ],
     "mac": {
       "target": [

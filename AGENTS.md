@@ -38,6 +38,7 @@ Python 3.11 or newer, Node 18 or newer. Always work inside a venv: pip refuses t
 | `api/policy.py` | The organisation's policy file, read once at start. |
 | `api/licensing.py`, `api/ed25519.py` | The trial, the licence file and its signature. |
 | `api/analysis_cache.py` | The eight cached analyses and the digest that keys them. |
+| `api/model_store.py` | The on-device models: pinned Hugging Face sources, the verified and resumable download, and delete. |
 | `api/storage.py` | The files written 0600, and the FileVault check. |
 | `api/tests/` | 361 tests in 21 files. Each test gets its own settings folder. |
 | `desktop/main.js` | The shell: a free port, the sidecar, the window. |
@@ -51,7 +52,7 @@ Python 3.11 or newer, Node 18 or newer. Always work inside a venv: pip refuses t
 ## Traps
 
 - **The `e2e` head of GigaAM is a privacy requirement.** `api/stt.py` loads `gigaam-v3-e2e-rnnt`. The plain head writes dictated digits as words, the PII model does not read "восемь девятьсот..." as a phone number, and the number reaches the provider unmasked. Do not switch the head for a quality reason.
-- **Bump `analysis_cache.PIPELINE_VERSION` when the transcript changes.** The cache digest covers the audio bytes, the file suffix, the model directory and that version, and nothing else. A change in recognition or diarization that does not bump it returns the old transcript for the same audio.
+- **Bump `analysis_cache.PIPELINE_VERSION` when the transcript changes.** The cache digest covers the audio bytes, the file suffix, the model directory, whether the speaker models are installed, and that version, and nothing else. A change in recognition or diarization that does not bump it returns the old transcript for the same audio.
 - **The rule layer may only fill gaps.** `rules.fill_gaps` keeps the parts of a rule span the model did not cover. The layer used to run over the model, and on the redmadrobot benchmark it cost the card 6.2 F1 and the phone 2.2, because a rule span and a model span over the same number counted as a hit and a miss at once.
 - **The NER windows are computed by hand.** `ner.window_starts` builds the sliding windows from the full token list. The tokenizer's own `return_overflowing_tokens` returned a short tail on transformers 5.19, and everything past about 1976 characters was never classified, so personal data reached the model in the clear.
 - **A Russian case ending belongs inside the person span.** `masking._extend_over_ending` extends the span over the ending. Left alone, the token appears glued to it, as `[PERSON_6]у`, and the model copies the broken shape into the reply.

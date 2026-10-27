@@ -46,16 +46,18 @@ if [ "$OS" = "Darwin" ]; then
   ok "macOS $(sw_vers -productVersion 2>/dev/null)"
   APP_DIR="${APP_DIR:-$(resolve_macos_app)}"
   RESOURCES="$APP_DIR/Contents/Resources"
-  # Models ship inside the bundle now, so the app's own Resources is the default.
-  MODELS_DIR="${MODELS_DIR:-$RESOURCES/models}"
+  # The app fetches its models on first launch into the user's data folder, which is
+  # where a finished install keeps them. MODELS_DIR points the check elsewhere.
+  MODELS_DIR="${MODELS_DIR:-$HOME/Library/Application Support/sttshka-desktop/models}"
   EXE="$RESOURCES/sidecar/sttshka-api/sttshka-api"
   if [ "$ARCH" = "arm64" ]; then ok "Apple Silicon ($ARCH)"; else bad "Ожидался arm64, сейчас $ARCH."; fi
 elif [ "$OS" = "Linux" ]; then
   ok "Linux ($ARCH)"
   APP_DIR="${APP_DIR:-$ROOT/desktop/release/linux-unpacked}"
   RESOURCES="$APP_DIR/resources"
-  # Models ship inside the bundle now, so the app's own resources dir is the default.
-  MODELS_DIR="${MODELS_DIR:-$RESOURCES/models}"
+  # The app fetches its models on first launch into the user's config folder (Electron's
+  # userData on Linux). MODELS_DIR points the check elsewhere.
+  MODELS_DIR="${MODELS_DIR:-$HOME/.config/sttshka-desktop/models}"
   EXE="$RESOURCES/sidecar/sttshka-api/sttshka-api"
   # CoreML exists only on Apple Silicon; on Linux CPU is the expected provider.
   if [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "aarch64" ]; then ok "поддерживаемая архитектура ($ARCH)"; fi
@@ -85,7 +87,7 @@ do
   if [ -s "$MODELS_DIR/$f" ]; then ok "$f"; else bad "не хватает $f"; MISSING=1; fi
 done
 if [ "$MISSING" -eq 1 ]; then
-  note "модели вшиваются при сборке: выполните ./download_models.sh и пересоберите ./desktop/build.sh"
+  note "модели ещё не скачаны: откройте приложение, и оно загрузит их при первом запуске"
 fi
 
 # Diarization ships as two small (~33 MB) optional models. Missing them is not
@@ -93,7 +95,7 @@ fi
 if [ -s "$MODELS_DIR/diarization/segmentation/model.onnx" ] && [ -s "$MODELS_DIR/diarization/embedding.onnx" ]; then
   ok "модели диаризации на месте"
 else
-  note "модели диаризации не вшиты: разбивка по говорящим будет недоступна (./download_models.sh)"
+  note "модели диаризации не скачаны: разбивка по говорящим будет недоступна, пока их не загрузят"
 fi
 
 # ------------------------------------------- launch sidecar and probe it

@@ -5,9 +5,8 @@
 #   ./desktop/build.sh --mac    # force macOS targets (must run on a Mac)
 #   ./desktop/build.sh --linux  # force Linux targets
 #
-# Models ARE bundled into the app (~0.6 GB), so it is self-contained and
-# relocatable. They must therefore be present at build time — see the check in
-# preflight and download_models.sh.
+# Models are NOT bundled: the app fetches them on first launch (api/model_store.py),
+# so a build needs no model files and the installer stays small.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -92,25 +91,9 @@ echo "node:   $(node -v)"
 echo "python: $("$PYTHON" -V 2>&1)"
 echo "arch:   $(uname -m)"
 
-# Models are bundled into the app, so they must exist before the bundle step —
-# otherwise electron-builder happily ships an app that cannot transcribe.
-MODELS_SRC="$ROOT/models"
-for model_file in \
-  "gigaam/v3_e2e_rnnt_encoder.int8.onnx" \
-  "gigaam/v3_e2e_rnnt_decoder.int8.onnx" \
-  "gigaam/v3_e2e_rnnt_joint.int8.onnx" \
-  "gigaam/v3_e2e_rnnt_vocab.txt" \
-  "gigaam/config.json" \
-  "rubert-pii/model.optimized.fp16.onnx" \
-  "rubert-pii/config.json" \
-  "rubert-pii/tokenizer.json"
-do
-  [ -s "$MODELS_SRC/$model_file" ] \
-    || fail "Нет модели $model_file в $MODELS_SRC
-Модели вшиваются в приложение, поэтому их нужно скачать ДО сборки:
-    ./download_models.sh"
-done
-echo "модели: $(du -sh "$MODELS_SRC" | cut -f1) в $MODELS_SRC (будут вшиты)"
+# Nothing to check here: the models are not part of the bundle. The app downloads them
+# on first launch, and a development run reads ./models (download_models.sh).
+echo "модели: не вшиваются, приложение скачает их при первом запуске"
 
 # ------------------------------------------------------------- web frontend
 say "1/4  Веб-интерфейс"
@@ -232,7 +215,7 @@ if [ "$TARGET" = mac ]; then
 else
   echo "  1. Установите release/*.deb (или запустите release/*.AppImage)."
 fi
-echo "  2. Модели уже вшиты в приложение — ничего копировать не нужно."
+echo "  2. При первом запуске приложение предложит скачать модели (около 620 МБ, один раз)."
 echo "  3. Проверка: ./desktop/verify.sh"
 if [ "$TARGET" = mac ]; then
   echo "  4. При первом запуске macOS может попросить подтвердить приложение,"
