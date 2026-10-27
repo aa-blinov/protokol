@@ -11,7 +11,7 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 import config
 import analysis_cache
 import licensing
+import model_store
 import llm
 import schemas
 import storage
@@ -350,6 +351,87 @@ def list_models() -> list[schemas.ModelInfo]:
         ]
     except RuntimeError as error:
         raise HTTPException(502, str(error)) from error
+
+
+# On-device models: the speech and masking models the app fetches on first use. The
+# provider's model list above is about the language model; these are about this Mac.
+_fetch_cancel: Event | None = None
+
+
+def _model_line(stage: str, payload: dict) -> str:
+    return json.dumps({"stage": stage, **payload}, ensure_ascii=False) + "\n"
+
+
+@app.get("/api/local-models")
+def local_models() -> dict:
+    items = model_store.status()
+    return {
+        "ready": all(item["installed"] for item in items if item["required"]),
+        "allowed": config.POLICY.allow_model_download,
+        "folder": str(model_store.root()),
+        "models": items,
+    }
+
+
+@app.post("/api/local-models/download")
+def download_local_models(request: schemas.LocalModelsRequest | None = None) -> StreamingResponse:
+    """Fetch the chosen models, the required ones by default, as NDJSON progress lines."""
+    global _fetch_cancel
+    if not config.POLICY.allow_model_download:
+        raise HTTPException(403, "Загрузка моделей запрещена политикой организации.")
+    ids = (request.ids if request and request.ids else None) or model_store.required_ids()
+    if not model_store.lock.acquire(blocking=False):
+        raise HTTPException(409, "Загрузка уже идёт.")
+    cancel = Event()
+    _fetch_cancel = cancel
+
+    def stream():
+        global _diarizer, _diarizer_checked, _fetch_cancel
+        try:
+            for event in model_store.download(ids, cancel):
+                yield _model_line("progress", event)
+            # A failed diarizer look-up is remembered until restart. Forget it, so the
+            # models that just arrived are used from the next analysis on.
+            _diarizer, _diarizer_checked = None, False
+            yield _model_line("done", {})
+        except model_store.Cancelled as error:
+            yield _model_line("cancelled", {"message": str(error)})
+        except model_store.ModelError as error:
+            yield _model_line("error", {"message": str(error)})
+        except Exception:  # noqa: BLE001 - keep the stream well-formed for the UI
+            log.exception("model download failed")
+            yield _model_line("error", {"message": "Не удалось загрузить модели. Попробуйте позже."})
+        finally:
+            _fetch_cancel = None
+            model_store.lock.release()
+
+    return StreamingResponse(stream(), media_type="application/x-ndjson")
+
+
+@app.post("/api/local-models/cancel")
+def cancel_local_models() -> dict:
+    if _fetch_cancel is None or _fetch_cancel.is_set():
+        return {"cancelled": False}
+    _fetch_cancel.set()
+    return {"cancelled": True}
+
+
+@app.delete("/api/local-models/{model_id}")
+def delete_local_model(model_id: str) -> dict:
+    # A model that is loaded keeps its files open; removing them now would leave the
+    # app half-working until a restart, so the request waits for the person to restart.
+    in_use = {"stt": _stt is not None, "pii": _ner is not None, "diarization": _diarizer is not None}
+    if in_use.get(model_id):
+        raise HTTPException(409, "Модель сейчас используется. Закройте приложение и попробуйте снова.")
+    if not model_store.lock.acquire(blocking=False):
+        raise HTTPException(409, "Сейчас идёт загрузка моделей.")
+    try:
+        freed = model_store.delete(model_id)
+    except model_store.ModelError as error:
+        raise HTTPException(404, str(error)) from error
+    finally:
+        model_store.lock.release()
+    return {"freed": freed}
 
 
 @app.get("/api/health")

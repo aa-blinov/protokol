@@ -220,6 +220,12 @@ class EstimateResult(BaseModel):
     currency: str = "USD"
 
 
+class LocalModelsRequest(BaseModel):
+    """Which on-device models to fetch. Empty means the required ones."""
+
+    ids: list[str] | None = None
+
+
 class LicenceActivate(BaseModel):
     """A licence file as the customer received it."""
 
