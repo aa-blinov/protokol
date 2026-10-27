@@ -29,7 +29,15 @@ from typing import Any
 
 DEFAULT_PATH = Path("/Library/Application Support/Protokol/policy.json")
 KNOWN_KEYS = frozenset(
-    {"base_url", "lock_settings", "retention_days", "allow_export", "zdr", "data_collection"}
+    {
+        "base_url",
+        "lock_settings",
+        "retention_days",
+        "allow_export",
+        "allow_model_download",
+        "zdr",
+        "data_collection",
+    }
 )
 MAX_RETENTION_DAYS = 3650
 
@@ -43,6 +51,8 @@ class Policy:
     lock_settings: bool = False
     retention_days: int | None = None
     allow_export: bool = True
+    # Off for a closed network: the models are then copied into the folder by hand.
+    allow_model_download: bool = True
     zdr: bool | None = None
     data_collection: str | None = None
     errors: tuple[str, ...] = field(default_factory=tuple)
@@ -71,6 +81,7 @@ def load(file: Path | None = None) -> Policy:
         "lock_settings": _check_bool,
         "retention_days": _check_days,
         "allow_export": _check_bool,
+        "allow_model_download": _check_bool,
         "zdr": _check_bool,
         "data_collection": _check_collection,
     }

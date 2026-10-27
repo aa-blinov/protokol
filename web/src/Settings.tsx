@@ -11,6 +11,7 @@
  *  need is rarely the one that sorts first. */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { LocalModelsSection } from "./LocalModels";
 import {
   activateLicence,
   getHealth,
@@ -561,6 +562,8 @@ export function SettingsPanel({ onSaved }: { onSaved: (state: SettingsState) => 
           ) : null}
         </Section>
       </fieldset>
+
+      <LocalModelsSection />
 
       <Section label="Лицензия">
         <p className="text-sm text-stone-700">

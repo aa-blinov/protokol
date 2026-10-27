@@ -76,10 +76,13 @@ function sidecarCommand() {
 function sidecarEnv(port) {
   const env = { ...process.env, HOST: "127.0.0.1", PORT: String(port) };
   if (!env.MODELS_DIR) {
-    // Models ship inside the bundle so the app is self-contained and relocatable.
+    // Packaged builds fetch their models on first launch into the user's data folder,
+    // so the installer stays small and the models survive an app update. A development
+    // run keeps reading ./models, which download_models.sh fills.
     env.MODELS_DIR = app.isPackaged
-      ? path.join(process.resourcesPath, "models")
+      ? path.join(app.getPath("userData"), "models")
       : path.join(__dirname, "..", "models");
+    fs.mkdirSync(env.MODELS_DIR, { recursive: true });
   }
   if (!env.WEB_DIST_DIR) {
     env.WEB_DIST_DIR = app.isPackaged

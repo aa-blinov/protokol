@@ -345,6 +345,69 @@ export interface HealthState {
   retention_days: number;
 }
 
+/** An on-device model the app fetches on first use (see api/model_store.py). */
+export interface LocalModel {
+  id: string;
+  title: string;
+  required: boolean;
+  installed: boolean;
+  size: number;
+  missing: number;
+  partial_bytes: number;
+}
+
+export interface LocalModelsState {
+  ready: boolean;
+  allowed: boolean;
+  folder: string;
+  models: LocalModel[];
+}
+
+/** One NDJSON line of a model download. `done` and `total` are bytes. */
+export interface ModelProgress {
+  stage: "progress" | "done" | "cancelled" | "error";
+  model?: string;
+  file?: string;
+  done?: number;
+  total?: number;
+  message?: string;
+}
+
+export async function getLocalModels(): Promise<LocalModelsState> {
+  const response = await request("/api/local-models");
+  if (!response.ok) await toError(response);
+  return response.json();
+}
+
+/** Fetches the named models. An interrupted download resumes from the bytes on disk. */
+export async function downloadLocalModels(
+  ids: string[],
+  onEvent: (event: ModelProgress) => void,
+): Promise<void> {
+  const response = await request("/api/local-models/download", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
+  if (!response.ok) await toError(response);
+  await readStream<ModelProgress>(
+    response,
+    onEvent,
+    (event) => event.stage === "error",
+    (event) => event.message ?? "Не удалось загрузить модели",
+  );
+}
+
+export async function deleteLocalModel(id: string): Promise<{ freed: number }> {
+  const response = await request(`/api/local-models/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!response.ok) await toError(response);
+  return response.json();
+}
+
+export async function cancelLocalModels(): Promise<void> {
+  await request("/api/local-models/cancel", { method: "POST" });
+}
+
 export async function getHealth(): Promise<HealthState> {
   const response = await request("/api/health");
   if (!response.ok) await toError(response);
