@@ -28,6 +28,7 @@ preprocessor is reused from ``onnx_asr`` rather than re-derived.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import permutations
 from pathlib import Path
 from threading import Lock
 
@@ -282,6 +283,56 @@ def _borrow_short_turns(turns: list[Turn], anchors: list[Turn]) -> list[Turn]:
     return borrowed
 
 
+# Ways to match three speakers between two windows. The segmentation model numbers the speakers
+# of each window arbitrarily, so the numbering can change from one window to the next.
+_SPEAKER_ORDERS = [list(order) for order in permutations(range(3))]
+
+
+def _marginals(powerset: np.ndarray) -> np.ndarray:
+    """Speaker activity from the powerset classes: no-speech, then speakers 1-3.
+
+    The model's classes are no-speech, one speaker, or a pair of speakers talking together.
+    A pair counts as activity for both of its members. Returns (frames, 4): no-speech, then
+    the activity of speakers 1-3.
+    """
+    return np.stack(
+        [
+            powerset[:, 0],
+            powerset[:, 1] + powerset[:, 4] + powerset[:, 5],
+            powerset[:, 2] + powerset[:, 4] + powerset[:, 6],
+            powerset[:, 3] + powerset[:, 5] + powerset[:, 6],
+        ],
+        axis=1,
+    )
+
+
+def _stitch(windows: list[np.ndarray], overlap_frames: int) -> list[np.ndarray]:
+    """The frames each window owns, with every window's speakers matched to the window before.
+
+    Consecutive windows share ``overlap_frames`` frames. Averaging them without matching the
+    speakers first mixes two different people at every seam, so a speaker can vanish or be
+    handed to the other one for a few seconds. The matching is the order that agrees best with
+    the shared frames. onnx_asr defines a ``reorder`` for this but never calls it. The last
+    window keeps all its frames; each earlier window gives its shared tail to the next one.
+    """
+    owned = windows[0].shape[0] - overlap_frames
+    pieces: list[np.ndarray] = []
+    tail: np.ndarray | None = None
+    for number, window in enumerate(windows):
+        window = window.copy()
+        if tail is not None:
+            order = min(
+                _SPEAKER_ORDERS,
+                key=lambda perm: np.abs(window[:overlap_frames, 1:][:, perm] - tail[:, 1:]).sum(),
+            )
+            window[:, 1:] = window[:, 1:][:, order]
+            window[:overlap_frames] = (window[:overlap_frames] + tail) / 2
+        last = number == len(windows) - 1
+        pieces.append(window if last else window[:owned])
+        tail = None if last else window[owned:]
+    return pieces
+
+
 class Diarizer:
     """Recognize speaker turns. Construct once and reuse; ``diarize`` is thread-safe."""
 
@@ -303,9 +354,9 @@ class Diarizer:
 
         self.cluster_threshold = cluster_threshold
         providers = config.ort_providers()
-        # pyannote segmentation: loaded through onnx_asr so its powerset decoding
-        # (and the window re-ordering that keeps local speaker order stable) is
-        # the same code the library ships and tests.
+        # pyannote segmentation: loaded through onnx_asr for its encoder and its powerset
+        # classes. Its window stitching does not match speaker order between windows, so
+        # the stitching is done here (see _stitch).
         options = config.session_options(threads)
         self._vad = onnx_asr.load_vad(
             "onnx-community/pyannote-segmentation-3.0",
@@ -328,10 +379,12 @@ class Diarizer:
         # is single-speaker in practice; padding keeps it on the normal path.
         if waveform.shape[1] < window:
             waveform = np.pad(waveform, ((0, 0), (0, window - waveform.shape[1])))
-        encoded = self._vad._encode(waveform, window, overlap)
+        overlap_frames = self._vad._sample2frame(overlap)
+        windows = [_marginals(batch[0]) for batch in self._vad._encode(waveform, window, overlap)]
         frames: list[tuple[int, int]] = []
-        for begin, block in self._vad._decode((batch[0] for batch in encoded), window, overlap):
-            for index, row in enumerate(block):
+        for number, piece in enumerate(_stitch(windows, overlap_frames)):
+            begin = number * (window - overlap)
+            for index, row in enumerate(piece):
                 position = begin + (index - 1) * _STRIDE + _RECEPTIVE_FIELD + _OFFSET
                 speaker = -1 if row[0] >= _SPEECH_THRESHOLD else int(np.argmax(row[1:4]))
                 frames.append((position, speaker))
