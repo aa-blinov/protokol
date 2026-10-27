@@ -38,7 +38,7 @@ def _diarization_installed() -> bool:
     return config.DIARIZATION_SEG_DIR.joinpath("model.onnx").is_file() and config.DIARIZATION_EMB_PATH.is_file()
 
 
-def key_for(audio: bytes, suffix: str, speakers: int | None = None) -> str:
+def key_for(audio: bytes, suffix: str, speakers: int | None = None, diarize: bool = True) -> str:
     """Digest of the recording, the format, the ASR model, the speaker models, the participant count and the version.
 
     All of them change the result on their own: the same bytes named .m4a and
@@ -52,7 +52,8 @@ def key_for(audio: bytes, suffix: str, speakers: int | None = None) -> str:
     """
     digest = hashlib.sha256()
     digest.update(audio)
-    installed = int(_diarization_installed())
+    # Switched off, separation gives the transcript of a missing model, so it shares that entry.
+    installed = int(_diarization_installed() and diarize)
     named = "auto" if speakers is None else str(speakers)
     digest.update(f"|{suffix}|{config.GIGAAM_DIR}|diar{installed}|spk{named}|v{PIPELINE_VERSION}".encode())
     return digest.hexdigest()[:24]

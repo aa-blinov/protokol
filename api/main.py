@@ -495,7 +495,7 @@ def mask_text(request: schemas.MaskRequest) -> schemas.MaskResponse:
     )
 
 
-def _analyse(audio: bytes, suffix: str, speakers: int | None = None):
+def _analyse(audio: bytes, suffix: str, speakers: int | None = None, diarize: bool = True):
     """Transcribe, split by speaker, mask -- everything except the summary.
 
     A generator: yields ``(stage, pct, message)`` while the work happens and
@@ -506,11 +506,17 @@ def _analyse(audio: bytes, suffix: str, speakers: int | None = None):
     ``speakers`` is the participant count the person gave, or ``None`` for the
     automatic count. It is part of the cache key, so the two never answer for each other.
 
+    ``diarize`` False switches speaker separation off for this recording. The speaker
+    model is then not loaded at all, and the count is dropped with it.
+
     The result is cached under the digest of the audio, so a second summary of
     the same recording -- a different focus, a tweaked instruction -- costs
     nothing but the model call itself.
     """
-    key = analysis_cache.key_for(audio, suffix, speakers)
+    if not diarize:
+        # The count only steers the diarizer, so without it the key must not split on it.
+        speakers = None
+    key = analysis_cache.key_for(audio, suffix, speakers, diarize)
     cached = analysis_cache.get(key)
     if cached is not None:
         yield ("done", 100, "Расшифровка уже готова", {**cached, "cached": True})
@@ -524,7 +530,7 @@ def _analyse(audio: bytes, suffix: str, speakers: int | None = None):
     timings: dict[str, float] = {}
     segments: list[schemas.SpeakerSegment] = []
 
-    diarizer = get_diarizer()
+    diarizer = get_diarizer() if diarize else None
     if diarizer is not None:
         yield ("diarize", 20, "Определение говорящих", None)
         diarize_started = time.perf_counter()
@@ -615,14 +621,19 @@ def _analysis_line(
 
 
 @app.post("/api/analyse")
-async def analyse(file: UploadFile = File(...), speakers: int | None = Form(None)) -> StreamingResponse:
+async def analyse(
+    file: UploadFile = File(...),
+    speakers: int | None = Form(None),
+    diarize: bool = Form(True),
+) -> StreamingResponse:
     """Everything up to the masked text, as NDJSON. No model call happens here.
 
     Split from the summary so this half can be reused: the focus can change any
     number of times without listening to the recording again.
 
     ``speakers`` is the participant count the person gave. Empty means the speaker
-    count is left to the clustering.
+    count is left to the clustering. ``diarize`` False keeps the speaker model out of
+    the run even when it is installed, which saves its time and memory.
     """
     _licensed()
     if speakers is not None and not 1 <= speakers <= 10:
@@ -634,7 +645,7 @@ async def analyse(file: UploadFile = File(...), speakers: int | None = Form(None
 
     def stream():
         try:
-            for stage, pct, message, payload in _analyse(audio, suffix, speakers):
+            for stage, pct, message, payload in _analyse(audio, suffix, speakers, diarize):
                 yield _analysis_line(stage, pct, message, payload)
         except HTTPException as error:
             yield _analysis_line("error", 100, str(error.detail))
