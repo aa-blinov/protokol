@@ -1,0 +1,322 @@
+/* The kit's tokens and themes come first, then Tailwind's layers, then the
+   app's own rules. The order is the reference implementation's, from the Monos
+   front end, and it matters: the kit's base rules are unlayered, so Tailwind's
+   base has to come after them or it would reset the page. */
+@import "@monos/ui/tokens.css";
+@import "@monos/ui/themes.css";
+
+/* The face, bundled: the app runs offline in a desktop window, and a hosted
+   stylesheet would be a network dependency at first paint. */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/JetBrainsMono-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/JetBrainsMono-SemiBold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/JetBrainsMono-Bold.woff2") format("woff2");
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* One corner for every rectangle. */
+  --radius: 6px;
+  --font-ui: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* The page itself. The kit ships tokens and themes; the page is the app's
+   own, and these are the kit's base rules written out: the ground, the ink,
+   the caret, the selection, the scrollbars and the one focus ring. */
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ui-bg);
+  color: var(--ui-ink);
+  font-family: var(--font-ui);
+  font-variant-ligatures: none;
+  caret-color: var(--ui-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
+  color: var(--ui-ink);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--ui-ink-faint);
+  opacity: 1;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-line) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--ui-line);
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ui-ink-muted);
+}
+
+a {
+  text-underline-offset: 2px;
+}
+
+/* Entity chips. The kit draws a chip as a bordered word on the canvas, not a
+   filled block, so the border and the text carry the type and the ground stays
+   the page. Six groups share five tones and a neutral: colour that means
+   something is not colour that decorates. The "-text" variants of the kit's
+   tones are the contrast-corrected ones, so a chip stays legible in both
+   halves of the palette. */
+.chip {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.05rem 0.3rem;
+  border-radius: var(--ui-radius);
+  border: 1px solid var(--ui-line);
+  background: var(--ui-bg);
+  color: var(--ui-ink-soft);
+  white-space: nowrap;
+}
+
+.chip-PERSON,
+.chip-EMAIL {
+  border-color: var(--ui-accent);
+  color: var(--ui-accent-text);
+}
+
+.chip-ADDRESS {
+  border-color: var(--ui-success);
+  color: var(--ui-success-text);
+}
+
+.chip-PHONE {
+  border-color: var(--ui-warning);
+  color: var(--ui-warning-text);
+}
+
+.chip-PASSPORT,
+.chip-INN,
+.chip-SNILS,
+.chip-OMS,
+.chip-CARD,
+.chip-DRIVER_LICENSE,
+.chip-MILITARY_ID,
+.chip-BIRTH_CERTIFICATE,
+.chip-OGRNIP,
+.chip-SECRET {
+  border-color: var(--ui-danger);
+  color: var(--ui-danger-text);
+}
+
+.chip-URL,
+.chip-IP,
+.chip-OTHER {
+  border-color: var(--ui-line);
+  color: var(--ui-ink-muted);
+}
+
+/* Search hits in the transcript. Amber for every match, a hard outline on the
+   one currently being looked at -- a transcript is several screens long, and
+   "which of these forty is this" needs to be answerable without counting. */
+.hit {
+  background: var(--ui-warning);
+  color: var(--ui-bg);
+  border-radius: 2px;
+}
+
+.hit-current {
+  background: var(--ui-ink);
+  color: var(--ui-bg);
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px var(--ui-ink-soft);
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--ui-ink-soft);
+  outline-offset: 2px;
+}
+
+/* The history rail stays in view while a long document scrolls. Desktop only:
+   below lg the rail sits under the document, and pinning it there would cover
+   the document. The top is the header's measured bottom (--header-h, written
+   by the shell) plus a gap. The rail scrolls inside itself when the history is
+   taller than the window, and the padding keeps focus rings from being
+   clipped. */
+@media (min-width: 1024px) {
+  .rail {
+    position: sticky;
+    top: calc(var(--header-h, 69px) + 1.5rem);
+    max-height: calc(100vh - var(--header-h, 69px) - 3rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 0.25rem 0.5rem;
+    margin: 0 -0.25rem;
+  }
+}
+
+/* --------------------------------------------------------------- zoom & text
+
+   Long unbroken strings -- a URL inside the model's context note, an
+   identifier, a filename the user cannot shorten -- are what break a two-column
+   layout when the window is narrow. Break them at any character rather than
+   letting them push the grid sideways. */
+p,
+li,
+td,
+th,
+span,
+code,
+kbd,
+.break-anywhere {
+  overflow-wrap: anywhere;
+}
+
+/* -------------------------------------------------------------------- print
+   Paper is not a screen: controls that need a click are noise on it, and the
+   grey-on-white the screen relies on goes to near-invisible. */
+
+@media print {
+  @page {
+    margin: 18mm;
+  }
+  .no-print {
+    display: none !important;
+  }
+  /* Anything you would have to press does not belong on paper. */
+  button,
+  input,
+  select,
+  textarea,
+  [role="radiogroup"],
+  .focus-ring {
+    display: none !important;
+  }
+  /* The transcript is the document; the chrome around it is not. */
+  header,
+  aside {
+    display: none !important;
+  }
+  /* Grey chosen for a lit screen disappears on paper. */
+  body,
+  p,
+  li,
+  span,
+  h1,
+  h2,
+  h3,
+  h4,
+  div,
+  td,
+  th {
+    color: #111827 !important;
+  }
+  mark,
+  .chip {
+    color: #111827 !important;
+    border: 1px solid #9ca3af !important;
+  }
+  a {
+    color: #111827 !important;
+    text-decoration: none;
+  }
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+  article {
+    max-width: none !important;
+  }
+  pre,
+  blockquote,
+  table {
+    break-inside: avoid;
+  }
+}
+
+/* --------------------------------------------------- forced / high contrast
+
+   Windows' forced-colors mode discards author colours wholesale. Two things
+   then go wrong here: the focus ring is drawn in `outline`, which survives, but
+   the selected preset loses its fill and the radio becomes the only signal;
+   and the tinted status bands lose their background, leaving their left stripe
+   as the sole marker. Both are stated explicitly rather than left to fall out. */
+@media (forced-colors: active) {
+  .focus-ring:focus-visible {
+    outline: 2px solid CanvasText;
+    outline-offset: 2px;
+  }
+  [role="radio"] {
+    forced-color-adjust: none;
+    border: 1px solid CanvasText;
+  }
+  [data-active="true"] {
+    border: 2px solid Highlight;
+  }
+  mark,
+  .chip {
+    border: 1px solid CanvasText;
+  }
+  * {
+    scrollbar-color: CanvasText transparent;
+  }
+}
+
+/* Reduced motion is an explicit alternative, not a global kill. Colour fades
+   stay (they move nothing); the one piece of movement, the progress fill, jumps
+   to its value instead of sliding there, and smooth scrolling is turned off. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  [data-slot="progress-indicator"] {
+    transition: none;
+  }
+}

@@ -42,7 +42,7 @@ Python 3.11 or newer, Node 18 or newer. Always work inside a venv: pip refuses t
 | `api/tests/` | 361 tests in 21 files. Each test gets its own settings folder. |
 | `desktop/main.js` | The shell: a free port, the sidecar, the window. |
 | `desktop/build.sh`, `desktop/verify.sh` | The bundle for this platform, and the check that runs on it. |
-| `web/src/` | The React interface. |
+| `web/src/` | The Svelte interface, built on the `@monos/ui` kit. |
 | `web/e2e/` | The browser checks against a stub provider, and the screenshot script. |
 | `benchmarks/` | The measurement scripts and the corpus builders. The corpora are downloaded, not committed. |
 | `tools/license_tool.py` | The vendor-side tool that issues licence files. The signing key never goes in the repository. |
