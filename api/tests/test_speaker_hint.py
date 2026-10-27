@@ -1,8 +1,8 @@
 """The participant count the person may give.
 
-Empty means the clustering decides, as before. A count means the clustering stops at that
-many speakers, the threshold does not apply, and nothing is folded afterwards. The API
-accepts one to ten; the cache keeps the two kinds of answer apart.
+Empty means the clustering decides, as before. A count keeps the same merges, then folds the
+smallest voice into its nearest neighbour until that many remain; it never invents a speaker
+the turns do not hold. The API accepts one to ten; the cache keeps the two kinds of answer apart.
 """
 
 from __future__ import annotations
@@ -42,6 +42,26 @@ def test_a_named_count_cannot_invent_speakers_the_turns_do_not_hold():
 def test_empty_count_keeps_the_automatic_clustering():
     embeddings = _three_speakers(7)
     assert cluster_embeddings(embeddings, threshold=0.99) == cluster_embeddings(embeddings, threshold=0.99, speakers=None)
+
+
+def test_a_named_count_does_not_join_two_real_speakers_to_reach_it():
+    # Two speakers sit 0.4 apart, below the threshold, so they stay two; the stray turn that
+    # resembles nobody is the one that should move. Merging to the count without the threshold
+    # joined the two speakers instead and kept the stray as a speaker of its own.
+    rng = np.random.default_rng(3)
+    centres = np.zeros((4, 8))
+    centres[0, 0] = 1.0
+    centres[1] = [0.4, np.sqrt(1 - 0.4**2), 0, 0, 0, 0, 0, 0]
+    centres[2, 2] = 1.0
+    centres[3, 3] = 1.0
+    stray = np.array([1, -1, 1, -1, 1, -1, 1, -1]) / np.sqrt(8)
+    turns = [centre + 0.02 * rng.standard_normal((6, 8)) for centre in centres]
+    embeddings = np.vstack([*turns, stray])
+    labels = cluster_embeddings(embeddings, speakers=4, seconds=[2.0] * 24 + [0.5])
+    speakers = [labels[i * 6 : (i + 1) * 6] for i in range(4)]
+    assert all(len(set(group)) == 1 for group in speakers)
+    assert len({group[0] for group in speakers}) == 4
+    assert len(set(labels)) == 4
 
 
 def test_a_recording_analysed_with_a_count_is_cached_apart():
