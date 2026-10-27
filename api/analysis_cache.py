@@ -29,8 +29,9 @@ MAX_ENTRIES = 8
 # version an entry written by the previous code is returned as if it were current.
 # 2: diarization folds slivers by seconds; 3: word-separator bonus on CTC;
 # 4: GigaAM v3 e2e RNN-T head with 20 s chunks; 5: clustering threshold 0.46 and
-# the speaker-turn join that keeps the later end.
-PIPELINE_VERSION = 5
+# the speaker-turn join that keeps the later end; 6: a named count keeps the
+# threshold and folds the smallest voice, instead of merging the big speakers.
+PIPELINE_VERSION = 6
 
 
 def _diarization_installed() -> bool:
