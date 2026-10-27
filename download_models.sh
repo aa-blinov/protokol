@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Download the ONNX models into ./models. ~0.9 GB total, run once.
+# Download the ONNX models into ./models for a development run. ~0.6 GB, run once.
+# The app fetches the same files itself on first launch (api/model_store.py); the
+# repository revisions below are the ones that file pins, so both read identical bytes.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -15,8 +17,8 @@ fetch() {
   fi
 }
 
-GIGAAM="https://huggingface.co/istupakov/gigaam-v3-onnx/resolve/main"
-PII="https://huggingface.co/lockR/rubert-base-pii-ner-onnx/resolve/main"
+GIGAAM="https://huggingface.co/istupakov/gigaam-v3-onnx/resolve/322c3b29492673eb7d0b434bfa9dfb8653e34d02"
+PII="https://huggingface.co/lockR/rubert-base-pii-ner-onnx/resolve/ea7610b22808c509c0c8b7c7b0f6639c19684d08"
 
 # GigaAM v3 E2E RNN-T. The e2e variant is required: it normalises dictated digits
 # so the PII model can recognise phone/passport/INN numbers at all. The plain
@@ -42,8 +44,8 @@ fetch "$PII/tokenizer_config.json"      models/rubert-pii/tokenizer_config.json
 # separates more speakers than the ERes2Net it replaced (7 on a real call vs 4),
 # and roughly halves the error on in-the-wild recordings. Optional — the app runs
 # without it, just without speaker labels.
-SEG="https://huggingface.co/onnx-community/pyannote-segmentation-3.0/resolve/main"
-EMB="https://huggingface.co/Luigi/campplus-zh-en-onnx/resolve/main"
+SEG="https://huggingface.co/onnx-community/pyannote-segmentation-3.0/resolve/733a93b6473d019a773298e08cefa686894b1854"
+EMB="https://huggingface.co/Luigi/campplus-zh-en-onnx/resolve/aa79cf9b8628a46ca362bf9bf7cde226a470a282"
 fetch "$SEG/config.json"                models/diarization/segmentation/config.json
 fetch "$SEG/onnx/model.onnx"            models/diarization/segmentation/model.onnx
 fetch "$EMB/campplus_zh_en_fp32.onnx"   models/diarization/embedding.onnx

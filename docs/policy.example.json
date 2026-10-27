@@ -3,6 +3,7 @@
   "lock_settings": true,
   "retention_days": 30,
   "allow_export": false,
+  "allow_model_download": false,
   "zdr": true,
   "data_collection": "deny"
 }
