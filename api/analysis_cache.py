@@ -37,21 +37,23 @@ def _diarization_installed() -> bool:
     return config.DIARIZATION_SEG_DIR.joinpath("model.onnx").is_file() and config.DIARIZATION_EMB_PATH.is_file()
 
 
-def key_for(audio: bytes, suffix: str) -> str:
-    """Digest of the recording, the format, the ASR model, the speaker models and the version.
+def key_for(audio: bytes, suffix: str, speakers: int | None = None) -> str:
+    """Digest of the recording, the format, the ASR model, the speaker models, the participant count and the version.
 
     All of them change the result on their own: the same bytes named .m4a and
     .mp3 can decode differently, a different model directory means a different
     transcript for the same audio, a code change alters the output with no
-    change to the audio at all, and a recording analysed before the speaker models
+    change to the audio at all, a recording analysed before the speaker models
     were downloaded has no speaker labels, so it must be analysed again once they
-    are there. Truncated to 24 hex digits -- this identifies a cache file, it is not
-    a security boundary.
+    are there, and a participant count the person gave changes the labels, so it
+    is a separate entry from the automatic one. Truncated to 24 hex digits -- this
+    identifies a cache file, it is not a security boundary.
     """
     digest = hashlib.sha256()
     digest.update(audio)
-    speakers = int(_diarization_installed())
-    digest.update(f"|{suffix}|{config.GIGAAM_DIR}|diar{speakers}|v{PIPELINE_VERSION}".encode())
+    installed = int(_diarization_installed())
+    named = "auto" if speakers is None else str(speakers)
+    digest.update(f"|{suffix}|{config.GIGAAM_DIR}|diar{installed}|spk{named}|v{PIPELINE_VERSION}".encode())
     return digest.hexdigest()[:24]
 
 

@@ -534,6 +534,14 @@ export default function App() {
    *  comes from this machine's own earlier runs rather than a guess. */
   const stageTimings = useRef<Record<string, number>>({});
   const [eta, setEta] = useState<number | null>(null);
+  // The participant count the person may type before a recording. Empty leaves the
+  // count to the clustering. The ref lets the analysis read the latest value without
+  // the callback having to be recreated.
+  const [participants, setParticipants] = useState("");
+  const participantsRef = useRef("");
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
   /** Row awaiting a delete confirmation. Removing a transcript is destructive
    *  and cannot be undone, so it takes a second, deliberate click. */
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -637,11 +645,16 @@ export default function App() {
     setView("empty");
     setProgress({ stage: "transcribe", pct: 0, message: "Загрузка файла" });
     try {
-      const result: AnalysisResult = await analyseAudio(file, (event) => {
-        setProgress(event);
-        const known = stageTimings.current[event.stage];
-        setEta(known !== undefined ? known * (1 - event.pct / 100) : null);
-      });
+      const count = Number.parseInt(participantsRef.current, 10);
+      const result: AnalysisResult = await analyseAudio(
+        file,
+        (event) => {
+          setProgress(event);
+          const known = stageTimings.current[event.stage];
+          setEta(known !== undefined ? known * (1 - event.pct / 100) : null);
+        },
+        Number.isFinite(count) ? count : null,
+      );
       const session: Session = {
         id: crypto.randomUUID(),
         name: file.name,
@@ -1120,6 +1133,21 @@ export default function App() {
                 <Button onClick={() => inputRef.current?.click()} disabled={busy !== "none"} size="lg">
                   Выбрать аудиофайл
                 </Button>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm text-stone-600">
+                <label htmlFor="participants">Участников</label>
+                <input
+                  id="participants"
+                  type="number"
+                  min={1}
+                  max={10}
+                  inputMode="numeric"
+                  placeholder="авто"
+                  value={participants}
+                  onChange={(event) => setParticipants(event.target.value)}
+                  className={`${FIELD} w-20 text-center`}
+                />
+                <span className="text-stone-500">пусто: число определит алгоритм по голосам</span>
               </div>
               {/* One line, and only what answers a question the button cannot.
                   Drag-and-drop is invisible until you know it exists; the privacy
