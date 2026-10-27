@@ -165,9 +165,13 @@ async function readStream<T>(
 export async function analyseAudio(
   file: File,
   onProgress: (event: AnalysisProgress) => void,
+  speakers?: number | null,
 ): Promise<AnalysisResult> {
   const form = new FormData();
   form.append("file", file);
+  // Left out, the clustering decides the count; a number is the participant count
+  // the person gave, and the server keeps its answer apart from the automatic one.
+  if (speakers) form.append("speakers", String(speakers));
   const response = await request("/api/analyse", { method: "POST", body: form });
   if (!response.ok) await toError(response);
 

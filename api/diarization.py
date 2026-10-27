@@ -124,13 +124,20 @@ def _cmn(features: np.ndarray) -> np.ndarray:
     return features - features.mean(axis=1, keepdims=True)
 
 
-def cluster_embeddings(embeddings: np.ndarray, threshold: float = _CLUSTER_THRESHOLD) -> list[int]:
+def cluster_embeddings(
+    embeddings: np.ndarray, threshold: float = _CLUSTER_THRESHOLD, speakers: int | None = None
+) -> list[int]:
     """Agglomerative average-linkage clustering over cosine similarity.
 
     Merges the two closest clusters while their average similarity is at least
     ``threshold``; the number of speakers falls out of the data. Tiny clusters
     are folded into their most similar neighbour so a stray turn does not become
     a speaker of its own.
+
+    ``speakers``, when the person names the count, replaces both rules: merging
+    goes on until that many clusters remain, and nothing is folded afterwards,
+    because a fold would take the count below the one asked for. A stray turn
+    then joins its nearest cluster through the same merge.
 
     Keeps one cluster-by-cluster average matrix. A merge rewrites only the kept
     cluster's row and column (Lance-Williams update), so each merge is one
@@ -164,14 +171,16 @@ def cluster_embeddings(embeddings: np.ndarray, threshold: float = _CLUSTER_THRES
     # nearest-neighbour chain, if that ever shows up in a profile.
     clusters = count
     while clusters > 1:
+        if speakers is not None and clusters <= speakers:
+            break
         i, j = divmod(int(np.argmax(average)), count)
-        if average[i, j] < threshold:
+        if speakers is None and average[i, j] < threshold:
             break
         merge(min(i, j), max(i, j))
         clusters -= 1
 
     # Fold noise clusters (< _MIN_CLUSTER_TURNS turns) into their best neighbour.
-    while clusters > 1:
+    while speakers is None and clusters > 1:
         small = np.flatnonzero(alive & (sizes < _MIN_CLUSTER_TURNS))
         if small.size == 0:
             break
@@ -327,9 +336,10 @@ class Diarizer:
         # Without CMN the same voice's turns drift apart and one speaker splits into several.
         return self._embedding.run(["embedding"], {"x": _cmn(features)})[0][0]
 
-    def diarize(self, samples: np.ndarray) -> list[Turn]:
+    def diarize(self, samples: np.ndarray, speakers: int | None = None) -> list[Turn]:
         """Return the speaker turns of a 16 kHz mono recording, or ``[]`` when
-        there is no speech."""
+        there is no speech. ``speakers`` is the participant count the person gave,
+        or ``None`` to let the clustering decide."""
         if len(samples) < _RECEPTIVE_FIELD:
             return []
         with self._lock:
@@ -340,11 +350,13 @@ class Diarizer:
             embeddings = np.asarray(
                 [self._embed(samples[int(t.start * SAMPLE_RATE) : int(t.end * SAMPLE_RATE)]) for t in long_enough]
             )
-            labels = cluster_embeddings(embeddings, self.cluster_threshold)
+            labels = cluster_embeddings(embeddings, self.cluster_threshold, speakers=speakers)
             # A fragment is judged by its seconds of speech, not by how many speakers
             # the clustering produced: a count gate let nine labels through as a
-            # "plausible meeting" when eight of them were slivers.
-            labels = fold_small_clusters(embeddings, labels, [t.end - t.start for t in long_enough])
+            # "plausible meeting" when eight of them were slivers. A count the person
+            # named is final, so the fold is skipped then.
+            if speakers is None:
+                labels = fold_small_clusters(embeddings, labels, [t.end - t.start for t in long_enough])
             labelled = [Turn(t.start, t.end, label) for t, label in zip(long_enough, labels)]
             borrowed = _borrow_short_turns(turns, labelled)
         return merge_turns(sorted(labelled + borrowed, key=lambda t: t.start))
