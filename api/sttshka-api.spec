@@ -29,7 +29,9 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["torch", "tensorflow", "PIL", "matplotlib", "tkinter"],
+    # pyarrow (119 MB) comes in with the dev venv, and nothing the app imports needs it. hf_xet (7 MB)
+    # is huggingface_hub's optional transfer backend; the app fetches its own models over httpx.
+    excludes=["torch", "tensorflow", "PIL", "matplotlib", "tkinter", "pyarrow", "hf_xet"],
     noarchive=False,
 )
 
