@@ -1,7 +1,7 @@
 {
   "name": "sttshka-desktop",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Протокол — приватная расшифровка встреч (macOS, Apple Silicon)",
   "homepage": "https://github.com/aa-blinov/protokol",
   "main": "main.js",
