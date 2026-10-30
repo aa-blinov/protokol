@@ -146,6 +146,16 @@ if [ "$TARGET" = mac ]; then
 
   APP_DIR="$ROOT/desktop/release/mac-arm64/sttshka.app"
   [ -d "$APP_DIR" ] || fail "electron-builder не собрал $APP_DIR"
+  # electron-builder's electronLanguages trims only the app's own Resources on macOS, so the
+  # Chromium locale packs inside the framework (~41 MB, 55 languages) would stay. The window is
+  # in Russian and Chromium's own menus fall back to English, so only those two are kept.
+  FRAMEWORK_RES="$APP_DIR/Contents/Frameworks/Electron Framework.framework/Resources"
+  for pack in "$FRAMEWORK_RES"/*.lproj; do
+    case "$(basename "$pack" .lproj)" in
+      en|ru) ;;
+      *) rm -rf "$pack" ;;
+    esac
+  done
   # Notices for the third-party parts of the app (models, dictionaries, web UI packages,
   # Electron). They go in before the signing below, so the signature covers them.
   RES="$APP_DIR/Contents/Resources"
