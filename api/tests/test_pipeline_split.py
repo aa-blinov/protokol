@@ -200,7 +200,7 @@ class TestDiarizedSegments:
 
     def diarized(self, monkeypatch, turns):
         class FakeDiarizer:
-            def diarize(self, samples):
+            def diarize(self, samples, speakers=None):
                 return turns
 
         monkeypatch.setattr(api, "get_diarizer", lambda: FakeDiarizer())

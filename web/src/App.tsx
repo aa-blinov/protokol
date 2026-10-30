@@ -9,7 +9,9 @@ import {
   type SettingsState,
   type SummarizeResult,
   getSessions,
+  getLocalModels,
   saveSessions,
+  type LocalModelsState,
 } from "./api";
 import { chipClass, findHits, MaskedView } from "./Highlight";
 import { Review } from "./Review";
@@ -534,6 +536,30 @@ export default function App() {
    *  comes from this machine's own earlier runs rather than a guess. */
   const stageTimings = useRef<Record<string, number>>({});
   const [eta, setEta] = useState<number | null>(null);
+  // The participant count the person may type before a recording. Empty leaves the
+  // count to the clustering. The ref lets the analysis read the latest value without
+  // the callback having to be recreated.
+  const [participants, setParticipants] = useState("");
+  const participantsRef = useRef("");
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
+  // The switch and the count only do something once the speaker model is on this machine.
+  // Checked again whenever Settings closes, because that is where the model is downloaded.
+  const [localModels, setLocalModels] = useState<LocalModelsState | null>(null);
+  const [separate, setSeparate] = useState(true);
+  const speakersReady = localModels?.models.some((model) => model.id === "diarization" && model.installed) ?? false;
+  const separating = speakersReady && separate;
+  const separatingRef = useRef(false);
+  useEffect(() => {
+    separatingRef.current = separating;
+  }, [separating]);
+  useEffect(() => {
+    if (settingsOpen) return;
+    getLocalModels()
+      .then(setLocalModels)
+      .catch(() => setLocalModels(null));
+  }, [settingsOpen]);
   /** Row awaiting a delete confirmation. Removing a transcript is destructive
    *  and cannot be undone, so it takes a second, deliberate click. */
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -637,11 +663,18 @@ export default function App() {
     setView("empty");
     setProgress({ stage: "transcribe", pct: 0, message: "Загрузка файла" });
     try {
-      const result: AnalysisResult = await analyseAudio(file, (event) => {
-        setProgress(event);
-        const known = stageTimings.current[event.stage];
-        setEta(known !== undefined ? known * (1 - event.pct / 100) : null);
-      });
+      const count = Number.parseInt(participantsRef.current, 10);
+      const split = separatingRef.current;
+      const result: AnalysisResult = await analyseAudio(
+        file,
+        (event) => {
+          setProgress(event);
+          const known = stageTimings.current[event.stage];
+          setEta(known !== undefined ? known * (1 - event.pct / 100) : null);
+        },
+        split && Number.isFinite(count) ? count : null,
+        split,
+      );
       const session: Session = {
         id: crypto.randomUUID(),
         name: file.name,
@@ -1120,6 +1153,35 @@ export default function App() {
                 <Button onClick={() => inputRef.current?.click()} disabled={busy !== "none"} size="lg">
                   Выбрать аудиофайл
                 </Button>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm text-stone-600">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={separating}
+                    disabled={!speakersReady}
+                    onChange={(event) => setSeparate(event.target.checked)}
+                  />
+                  Разделять говорящих
+                </label>
+                <label htmlFor="participants">Участников</label>
+                <input
+                  id="participants"
+                  type="number"
+                  min={1}
+                  max={10}
+                  inputMode="numeric"
+                  placeholder="авто"
+                  disabled={!separating}
+                  value={participants}
+                  onChange={(event) => setParticipants(event.target.value)}
+                  className={`${FIELD} w-20 text-center disabled:opacity-50`}
+                />
+                <span className="text-stone-500">
+                  {speakersReady
+                    ? "пусто: число определит алгоритм по голосам"
+                    : "модель говорящих не скачана: скачайте её в настройках"}
+                </span>
               </div>
               {/* One line, and only what answers a question the button cannot.
                   Drag-and-drop is invisible until you know it exists; the privacy

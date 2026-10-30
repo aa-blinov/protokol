@@ -28,6 +28,7 @@ preprocessor is reused from ``onnx_asr`` rather than re-derived.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import permutations
 from pathlib import Path
 from threading import Lock
 
@@ -124,13 +125,26 @@ def _cmn(features: np.ndarray) -> np.ndarray:
     return features - features.mean(axis=1, keepdims=True)
 
 
-def cluster_embeddings(embeddings: np.ndarray, threshold: float = _CLUSTER_THRESHOLD) -> list[int]:
+def cluster_embeddings(
+    embeddings: np.ndarray,
+    threshold: float = _CLUSTER_THRESHOLD,
+    speakers: int | None = None,
+    seconds: list[float] | None = None,
+) -> list[int]:
     """Agglomerative average-linkage clustering over cosine similarity.
 
     Merges the two closest clusters while their average similarity is at least
     ``threshold``; the number of speakers falls out of the data. Tiny clusters
     are folded into their most similar neighbour so a stray turn does not become
     a speaker of its own.
+
+    ``speakers``, when the person names the count, keeps the threshold for the
+    merges and then folds the smallest speaker into its most similar neighbour
+    until that many remain. ``seconds`` is the speech time of each turn, so the
+    smallest is judged by voice, not by turn count. Merging down to the count
+    without the threshold does not work: the most similar pairs are then two real
+    speakers, and the stray turns survive as speakers of their own. On an 85-minute
+    recorded call that gave one speaker 99.6% of the speech.
 
     Keeps one cluster-by-cluster average matrix. A merge rewrites only the kept
     cluster's row and column (Lance-Williams update), so each merge is one
@@ -143,6 +157,8 @@ def cluster_embeddings(embeddings: np.ndarray, threshold: float = _CLUSTER_THRES
     average = _cosine_similarity(embeddings)
     np.fill_diagonal(average, -np.inf)
     sizes = np.ones(count)
+    # Speech time per cluster. A count fold takes the smallest voice, not the one with the fewest turns.
+    totals = np.ones(count) if seconds is None else np.asarray(seconds, dtype=np.float64)
     members: list[list[int]] = [[i] for i in range(count)]
     alive = np.ones(count, dtype=bool)
 
@@ -156,6 +172,7 @@ def cluster_embeddings(embeddings: np.ndarray, threshold: float = _CLUSTER_THRES
         average[drop, :] = -np.inf
         average[:, drop] = -np.inf
         sizes[keep] += sizes[drop]
+        totals[keep] += totals[drop]
         members[keep] += members[drop]
         alive[drop] = False
 
@@ -170,15 +187,24 @@ def cluster_embeddings(embeddings: np.ndarray, threshold: float = _CLUSTER_THRES
         merge(min(i, j), max(i, j))
         clusters -= 1
 
-    # Fold noise clusters (< _MIN_CLUSTER_TURNS turns) into their best neighbour.
-    while clusters > 1:
-        small = np.flatnonzero(alive & (sizes < _MIN_CLUSTER_TURNS))
-        if small.size == 0:
-            break
-        k = int(small[0])
-        target = int(np.argmax(average[k]))
-        merge(min(k, target), max(k, target))
-        clusters -= 1
+    if speakers is not None:
+        # The named count is final: the smallest voice joins the one it sounds most like.
+        # Stops early when the turns hold fewer speakers than named.
+        while clusters > speakers:
+            k = int(np.argmin(np.where(alive, totals, np.inf)))
+            target = int(np.argmax(average[k]))
+            merge(min(k, target), max(k, target))
+            clusters -= 1
+    else:
+        # Fold noise clusters (< _MIN_CLUSTER_TURNS turns) into their best neighbour.
+        while clusters > 1:
+            small = np.flatnonzero(alive & (sizes < _MIN_CLUSTER_TURNS))
+            if small.size == 0:
+                break
+            k = int(small[0])
+            target = int(np.argmax(average[k]))
+            merge(min(k, target), max(k, target))
+            clusters -= 1
 
     labels = [0] * count
     for speaker, slot in enumerate(np.flatnonzero(alive)):
@@ -257,6 +283,56 @@ def _borrow_short_turns(turns: list[Turn], anchors: list[Turn]) -> list[Turn]:
     return borrowed
 
 
+# Ways to match three speakers between two windows. The segmentation model numbers the speakers
+# of each window arbitrarily, so the numbering can change from one window to the next.
+_SPEAKER_ORDERS = [list(order) for order in permutations(range(3))]
+
+
+def _marginals(powerset: np.ndarray) -> np.ndarray:
+    """Speaker activity from the powerset classes: no-speech, then speakers 1-3.
+
+    The model's classes are no-speech, one speaker, or a pair of speakers talking together.
+    A pair counts as activity for both of its members. Returns (frames, 4): no-speech, then
+    the activity of speakers 1-3.
+    """
+    return np.stack(
+        [
+            powerset[:, 0],
+            powerset[:, 1] + powerset[:, 4] + powerset[:, 5],
+            powerset[:, 2] + powerset[:, 4] + powerset[:, 6],
+            powerset[:, 3] + powerset[:, 5] + powerset[:, 6],
+        ],
+        axis=1,
+    )
+
+
+def _stitch(windows: list[np.ndarray], overlap_frames: int) -> list[np.ndarray]:
+    """The frames each window owns, with every window's speakers matched to the window before.
+
+    Consecutive windows share ``overlap_frames`` frames. Averaging them without matching the
+    speakers first mixes two different people at every seam, so a speaker can vanish or be
+    handed to the other one for a few seconds. The matching is the order that agrees best with
+    the shared frames. onnx_asr defines a ``reorder`` for this but never calls it. The last
+    window keeps all its frames; each earlier window gives its shared tail to the next one.
+    """
+    owned = windows[0].shape[0] - overlap_frames
+    pieces: list[np.ndarray] = []
+    tail: np.ndarray | None = None
+    for number, window in enumerate(windows):
+        window = window.copy()
+        if tail is not None:
+            order = min(
+                _SPEAKER_ORDERS,
+                key=lambda perm: np.abs(window[:overlap_frames, 1:][:, perm] - tail[:, 1:]).sum(),
+            )
+            window[:, 1:] = window[:, 1:][:, order]
+            window[:overlap_frames] = (window[:overlap_frames] + tail) / 2
+        last = number == len(windows) - 1
+        pieces.append(window if last else window[:owned])
+        tail = None if last else window[owned:]
+    return pieces
+
+
 class Diarizer:
     """Recognize speaker turns. Construct once and reuse; ``diarize`` is thread-safe."""
 
@@ -278,9 +354,9 @@ class Diarizer:
 
         self.cluster_threshold = cluster_threshold
         providers = config.ort_providers()
-        # pyannote segmentation: loaded through onnx_asr so its powerset decoding
-        # (and the window re-ordering that keeps local speaker order stable) is
-        # the same code the library ships and tests.
+        # pyannote segmentation: loaded through onnx_asr for its encoder and its powerset
+        # classes. Its window stitching does not match speaker order between windows, so
+        # the stitching is done here (see _stitch).
         options = config.session_options(threads)
         self._vad = onnx_asr.load_vad(
             "onnx-community/pyannote-segmentation-3.0",
@@ -303,10 +379,12 @@ class Diarizer:
         # is single-speaker in practice; padding keeps it on the normal path.
         if waveform.shape[1] < window:
             waveform = np.pad(waveform, ((0, 0), (0, window - waveform.shape[1])))
-        encoded = self._vad._encode(waveform, window, overlap)
+        overlap_frames = self._vad._sample2frame(overlap)
+        windows = [_marginals(batch[0]) for batch in self._vad._encode(waveform, window, overlap)]
         frames: list[tuple[int, int]] = []
-        for begin, block in self._vad._decode((batch[0] for batch in encoded), window, overlap):
-            for index, row in enumerate(block):
+        for number, piece in enumerate(_stitch(windows, overlap_frames)):
+            begin = number * (window - overlap)
+            for index, row in enumerate(piece):
                 position = begin + (index - 1) * _STRIDE + _RECEPTIVE_FIELD + _OFFSET
                 speaker = -1 if row[0] >= _SPEECH_THRESHOLD else int(np.argmax(row[1:4]))
                 frames.append((position, speaker))
@@ -327,9 +405,10 @@ class Diarizer:
         # Without CMN the same voice's turns drift apart and one speaker splits into several.
         return self._embedding.run(["embedding"], {"x": _cmn(features)})[0][0]
 
-    def diarize(self, samples: np.ndarray) -> list[Turn]:
+    def diarize(self, samples: np.ndarray, speakers: int | None = None) -> list[Turn]:
         """Return the speaker turns of a 16 kHz mono recording, or ``[]`` when
-        there is no speech."""
+        there is no speech. ``speakers`` is the participant count the person gave,
+        or ``None`` to let the clustering decide."""
         if len(samples) < _RECEPTIVE_FIELD:
             return []
         with self._lock:
@@ -340,11 +419,14 @@ class Diarizer:
             embeddings = np.asarray(
                 [self._embed(samples[int(t.start * SAMPLE_RATE) : int(t.end * SAMPLE_RATE)]) for t in long_enough]
             )
-            labels = cluster_embeddings(embeddings, self.cluster_threshold)
+            seconds = [t.end - t.start for t in long_enough]
+            labels = cluster_embeddings(embeddings, self.cluster_threshold, speakers=speakers, seconds=seconds)
             # A fragment is judged by its seconds of speech, not by how many speakers
             # the clustering produced: a count gate let nine labels through as a
-            # "plausible meeting" when eight of them were slivers.
-            labels = fold_small_clusters(embeddings, labels, [t.end - t.start for t in long_enough])
+            # "plausible meeting" when eight of them were slivers. A count the person
+            # named is final, so the fold is skipped then.
+            if speakers is None:
+                labels = fold_small_clusters(embeddings, labels, seconds)
             labelled = [Turn(t.start, t.end, label) for t, label in zip(long_enough, labels)]
             borrowed = _borrow_short_turns(turns, labelled)
         return merge_turns(sorted(labelled + borrowed, key=lambda t: t.start))
