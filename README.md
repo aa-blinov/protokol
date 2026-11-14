@@ -169,7 +169,7 @@ api/.venv/bin/python benchmarks/run_pii_bench_ru.py <folder with the parquet fil
 | `api/storage.py` | The files written 0600, and the FileVault check. |
 | `desktop/main.js` | The shell: a free port, the sidecar, the window. |
 | `desktop/build.sh`, `desktop/verify.sh` | The bundle for this platform, and its check. |
-| `web/src/` | The React interface. |
+| `web/src/` | The Svelte interface, built on the `@monos/ui` kit. |
 | `web/e2e/` | The browser checks and the screenshot script. |
 | `benchmarks/` | The measurement scripts and the corpus builders. |
 | `tools/license_tool.py` | The vendor-side tool that issues licences. |
